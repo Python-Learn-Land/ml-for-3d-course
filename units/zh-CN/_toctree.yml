@@ -1,0 +1,72 @@
+- title: 第 0 单元。课程导览
+  sections:
+      - local: unit0/introduction
+        title: 欢迎 🤗
+      - local: unit0/whats-going-on
+        title: 正在发生什么？
+      - local: unit0/why-does-it-matter
+        title: 为什么这很重要？
+      - local: unit0/how-to-do-it-yourself
+        title: 如何自己动手
+- title: 第 1 单元。什么是 3D？
+  sections:
+      - local: unit1/introduction
+        title: 简介
+      - local: unit1/meshes
+        title: 网格
+      - local: unit1/non-meshes
+        title: 非网格表示
+      - local: unit1/pipelines
+        title: 生成式 3D 流水线
+- title: 第 2 单元。多视图扩散
+  sections:
+      - local: unit2/introduction
+        title: 简介
+      - local: unit2/setup
+        title: 环境准备
+      - local: unit2/what-is-it
+        title: 它是什么？
+      - local: unit2/pipeline
+        title: 流水线
+      - local: unit2/hands-on-1
+        title: 动手实践（第一部分）
+      - local: unit2/hands-on-2
+        title: 动手实践（第二部分）
+      - local: unit2/bonus
+        title: 拓展练习
+- title: 第 3 单元。高斯泼溅
+  sections:
+      - local: unit3/introduction
+        title: 简介
+      - local: unit3/what-is-it
+        title: 它是什么？
+      - local: unit3/hands-on
+        title: 动手实践
+      - local: unit3/bonus
+        title: 拓展练习
+- title: 第 4 单元。网格
+  sections:
+      - local: unit4/introduction
+        title: 简介
+      - local: unit4/marching-cubes
+        title: Marching Cubes
+      - local: unit4/mesh-generation
+        title: 网格生成
+      - local: unit4/hands-on
+        title: 动手实践
+- title: 第 5 单元。毕业设计
+  sections:
+      - local: unit5/introduction
+        title: 简介
+      - local: unit5/walkthrough
+        title: 完整演示
+      - local: unit5/run-in-notebook
+        title: 在 Notebook 中运行
+      - local: unit5/run-locally
+        title: 本地运行
+      - local: unit5/run-via-api
+        title: 通过 API 运行
+- title: 结语
+  sections:
+      - local: conclusion/conclusion
+        title: 结语
