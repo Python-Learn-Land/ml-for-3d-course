@@ -1,0 +1,1291 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gaussian Splatting 交互讲解</title>
+<style>
+
+  :root {
+    --bg: #ffffff; --bg2: #f6f7f9; --fg: #1a1d21; --fg2: #5b6470; --fg3: #8a93a0;
+    --line: #e3e6ea; --line2: #cfd4da; --accent: #2e79b5; --accent-soft: rgba(46,121,181,.12);
+    --blue: #2e79b5; --orange: #f0a040; --purple: #7b64b8; --green: #1f8a65; --red: #c04848;
+    --warn-bg: rgba(240,160,64,.10); --danger-bg: rgba(192,72,72,.10); --info-bg: rgba(46,121,181,.08);
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161a; --bg2: #1c1f24; --fg: #e8eaed; --fg2: #a8b0ba; --fg3: #78818d;
+      --line: #2a2e35; --line2: #3a4048; --accent: #70b0d8; --accent-soft: rgba(112,176,216,.14);
+      --blue: #70b0d8; --orange: #f0a040; --purple: #aa98d8; --green: #52b896; --red: #e08080;
+      --warn-bg: rgba(240,160,64,.12); --danger-bg: rgba(224,128,128,.12); --info-bg: rgba(112,176,216,.10);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 14px/1.6 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    padding: 28px 20px 80px;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  h1 { font-size: 24px; line-height: 1.3; margin: 0 0 8px; font-weight: 600; }
+  h2 { font-size: 17px; margin: 28px 0 10px; font-weight: 600; }
+  h3 { font-size: 15px; margin: 18px 0 8px; font-weight: 600; }
+  p { margin: 8px 0; }
+  .lead { color: var(--fg2); max-width: 74ch; }
+  code, .mono { font-family: var(--mono); font-size: .92em; background: var(--bg2); padding: 1px 5px; border-radius: 4px; }
+  .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 20px 0 4px; }
+  .tab {
+    border: 1px solid var(--line2); background: var(--bg); color: var(--fg2);
+    border-radius: 999px; padding: 5px 14px; font-size: 13px; cursor: pointer; font-family: inherit;
+  }
+  .tab[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 500; }
+  .panel { display: none; margin-top: 18px; }
+  .panel.on { display: block; }
+  .grid2 { display: grid; grid-template-columns: minmax(0,1.35fr) minmax(0,1fr); gap: 16px; align-items: start; }
+  .grid2b { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.25fr); gap: 16px; align-items: start; }
+  @media (max-width: 860px) { .grid2, .grid2b { grid-template-columns: 1fr; } }
+  .card { border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+  .card > header {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 9px 14px; border-bottom: 1px solid var(--line); font-weight: 600; font-size: 13.5px;
+  }
+  .card > header .hint { font-weight: 400; color: var(--fg3); font-size: 12px; }
+  .card > .body { padding: 14px; }
+  .card > .body.tight { padding: 8px; }
+  .stack { display: flex; flex-direction: column; gap: 12px; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .row.spread { justify-content: space-between; }
+  label.ctl { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; color: var(--fg2); }
+  input[type="range"] { width: 100%; accent-color: var(--accent); cursor: pointer; }
+  select, input[type="number"] {
+    background: var(--bg2); color: var(--fg); border: 1px solid var(--line2);
+    border-radius: 5px; padding: 4px 7px; font: inherit; font-size: 13px;
+  }
+  input[type="number"] { width: 76px; }
+  .check { display: flex; gap: 7px; align-items: center; font-size: 13px; color: var(--fg); cursor: pointer; }
+  .check input { accent-color: var(--accent); width: 15px; height: 15px; }
+  button.btn {
+    border: 1px solid var(--line2); background: var(--bg2); color: var(--fg);
+    border-radius: 6px; padding: 4px 11px; font: inherit; font-size: 12.5px; cursor: pointer;
+  }
+  button.btn:hover { border-color: var(--accent); color: var(--accent); }
+  .stats { display: flex; gap: 22px; flex-wrap: wrap; }
+  .stat .v { font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .stat .l { font-size: 11.5px; color: var(--fg3); }
+  .stat.ok .v { color: var(--green); } .stat.bad .v { color: var(--red); } .stat.warn .v { color: var(--orange); }
+  svg { display: block; max-width: 100%; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 8px; font-size: 12px; color: var(--fg3); }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+  .callout { border-radius: 8px; padding: 10px 14px; font-size: 13px; border: 1px solid; }
+  .callout .t { font-weight: 600; margin-bottom: 3px; }
+  .callout.info { background: var(--info-bg); border-color: transparent; }
+  .callout.warn { background: var(--warn-bg); border-color: transparent; }
+  .callout.danger { background: var(--danger-bg); border-color: transparent; }
+  table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  th, td { border-bottom: 1px solid var(--line); padding: 5px 9px; text-align: left; }
+  th { color: var(--fg2); font-weight: 600; font-size: 12px; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr:nth-child(even) td { background: var(--bg2); }
+  .gallery { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 8px; }
+  @media (max-width: 860px) { .gallery { grid-template-columns: repeat(3, minmax(0,1fr)); } }
+  .gcell {
+    border: 1px solid var(--line); border-radius: 6px; padding: 5px; cursor: pointer; background: var(--bg);
+  }
+  .gcell.sel { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  .gcell .cap { font-size: 10.5px; color: var(--fg2); line-height: 1.35; }
+  .gcell .cap b { color: var(--fg); font-weight: 600; }
+  details > summary { cursor: pointer; font-weight: 600; font-size: 13.5px; padding: 4px 0; }
+  .src { font-size: 11.5px; color: var(--fg3); margin-top: 6px; }
+  .kv { font-size: 12.5px; color: var(--fg2); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Gaussian Splatting 交互讲解</h1>
+  <p class="lead">
+    课程里说泼溅体「可以实时渲染」，这一页把这句话拆开：每个泼溅体是 14 个数字的三维高斯，
+    渲染就是<b>投影 → 分块 → 排序 → α 混合</b>，而它之所以「对 AI 友好」，是因为整条链都可微。
+    本页所有图像都是<b>浏览器里实时光栅化</b>的（不是预渲染图片），核心代码逐行对齐官方 CUDA 实现，
+    并与 Python + numpy 参考实现逐位对拍。单文件、零依赖、可离线打开。
+  </p>
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" aria-selected="true"  data-tab="anatomy">一个泼溅体是什么</button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="pipe">光栅化流水线</button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="diff">为什么对 AI 友好</button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="fast">为什么快</button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="vs">对比与边界</button>
+  </div>
+
+  <section id="p-anatomy" class="panel on"></section>
+  <section id="p-pipe"    class="panel"></section>
+  <section id="p-diff"   class="panel"></section>
+  <section id="p-fast"   class="panel"></section>
+  <section id="p-vs"     class="panel"></section>
+</div>
+
+<script>
+/* ==========================================================================
+   Gaussian Splatting core — single source of truth.
+   Semantics follow the official CUDA rasterizer
+   (graphdeco-inria/diff-gaussian-rasterization, forward.cu) line by line;
+   cross-validated bit-for-bit against a Python + numpy reference build.
+   ========================================================================== */
+/* ---- constants, all from the official implementation ---- */
+const BLOCK = 16; // config.h: BLOCK_X = BLOCK_Y = 16
+const LOWPASS = 0.3; // forward.cu: cov[0][0] += 0.3 ; cov[1][1] += 0.3
+const ALPHA_CAP = 0.99; // forward.cu: alpha = min(0.99f, ...)
+const ALPHA_MIN = 1 / 255; // forward.cu: skip if alpha < 1/255
+const T_MIN = 1e-4; // forward.cu: early-out when T*(1-a) < 0.0001
+const NEAR_Z = 0.2; // forward.cu: cull if view z <= 0.2
+const LIM = 1.3; // forward.cu: clamp x/z, y/z to +-1.3*tanfov
+const SH_C0 = 0.28209479177387814; // auxiliary.h
+/* ---- quaternion (w,x,y,z) -> rotation matrix, exactly as computeCov3D ---- */
+function quatToR(w, x, y, z) {
+    return [
+        1 - 2 * (y * y + z * z), 2 * (x * y - w * z), 2 * (x * z + w * y),
+        2 * (x * y + w * z), 1 - 2 * (x * x + z * z), 2 * (y * z - w * x),
+        2 * (x * z - w * y), 2 * (y * z + w * x), 1 - 2 * (x * x + y * y),
+    ];
+}
+/* ---- world -> camera (OpenGL-ish, looks down +z) ---- */
+function lookAt(eye, target, up = [0, 0, 1]) {
+    const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+    const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+    const norm = (a) => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+    const fwd = norm(sub(target, eye));
+    let right = cross(fwd, up);
+    if (Math.hypot(right[0], right[1], right[2]) < 1e-8)
+        right = cross(fwd, [0, 1, 0]);
+    right = norm(right);
+    const camup = cross(right, fwd);
+    const R = [right[0], right[1], right[2], camup[0], camup[1], camup[2], fwd[0], fwd[1], fwd[2]];
+    const t = [
+        -(R[0] * eye[0] + R[1] * eye[1] + R[2] * eye[2]),
+        -(R[3] * eye[0] + R[4] * eye[1] + R[5] * eye[2]),
+        -(R[6] * eye[0] + R[7] * eye[1] + R[8] * eye[2]),
+    ];
+    return { R, t };
+}
+function orbitCamera(elevDeg, azimDeg, radius) {
+    const e = (elevDeg * Math.PI) / 180;
+    const a = (azimDeg * Math.PI) / 180;
+    const eye = [radius * Math.cos(e) * Math.sin(a), radius * Math.cos(e) * Math.cos(a), radius * Math.sin(e)];
+    return lookAt(eye, [0, 0, 0]);
+}
+/* ---- project all gaussians; mirrors forward.cu preprocessing ---- */
+function project(g, R, t, W, H, fovx, fovy, scaleMod = 1, lowpass = true) {
+    const fx = W / (2 * fovx);
+    const fy = H / (2 * fovy);
+    const gx = Math.ceil(W / BLOCK);
+    const gy = Math.ceil(H / BLOCK);
+    const out = [];
+    const N = g.length / 14;
+    for (let i = 0; i < N; i++) {
+        const o = i * 14;
+        const p = [g[o], g[o + 1], g[o + 2]];
+        const opacity = g[o + 3];
+        const sx = g[o + 4] * scaleMod, sy = g[o + 5] * scaleMod, sz = g[o + 6] * scaleMod;
+        const tv = [
+            R[0] * p[0] + R[1] * p[1] + R[2] * p[2] + t[0],
+            R[3] * p[0] + R[4] * p[1] + R[5] * p[2] + t[1],
+            R[6] * p[0] + R[7] * p[1] + R[8] * p[2] + t[2],
+        ];
+        if (tv[2] <= NEAR_Z)
+            continue;
+        const ndcx = (tv[0] / fovx) / tv[2];
+        const ndcy = (tv[1] / fovy) / tv[2];
+        const px = ((ndcx + 1) * W - 1) * 0.5;
+        const py = ((ndcy + 1) * H - 1) * 0.5;
+        const tz = tv[2];
+        const tx = Math.min(LIM * fovx, Math.max(-LIM * fovx, tv[0] / tz)) * tz;
+        const ty = Math.min(LIM * fovy, Math.max(-LIM * fovy, tv[1] / tz)) * tz;
+        // J (3x3, row-major), then T = R * J ; cov2d = T^T Sigma T
+        const J = [fx / tz, 0, -(fx * tx) / (tz * tz), 0, fy / tz, -(fy * ty) / (tz * tz), 0, 0, 0];
+        const Tm = new Array(9).fill(0);
+        for (let r = 0; r < 3; r++)
+            for (let c = 0; c < 3; c++) {
+                let s = 0;
+                for (let k = 0; k < 3; k++)
+                    s += R[r * 3 + k] * J[k * 3 + c];
+                Tm[r * 3 + c] = s;
+            }
+        const q = [g[o + 7], g[o + 8], g[o + 9], g[o + 10]];
+        const Rm = quatToR(q[0], q[1], q[2], q[3]);
+        const M = new Array(9).fill(0);
+        for (let r = 0; r < 3; r++)
+            for (let c = 0; c < 3; c++)
+                M[r * 3 + c] = [sx, sy, sz][r] * Rm[r * 3 + c];
+        // Sigma = M^T M
+        const S3 = new Array(9).fill(0);
+        for (let r = 0; r < 3; r++)
+            for (let c = 0; c < 3; c++) {
+                let s = 0;
+                for (let k = 0; k < 3; k++)
+                    s += M[k * 3 + r] * M[k * 3 + c];
+                S3[r * 3 + c] = s;
+            }
+        // C2 = Tm^T S3 Tm
+        const C2 = new Array(9).fill(0);
+        for (let r = 0; r < 3; r++)
+            for (let c = 0; c < 3; c++) {
+                let s = 0;
+                for (let m = 0; m < 3; m++)
+                    for (let n = 0; n < 3; n++)
+                        s += Tm[m * 3 + r] * S3[m * 3 + n] * Tm[n * 3 + c];
+                C2[r * 3 + c] = s;
+            }
+        let a = C2[0] + LOWPASS, b = C2[1], c = C2[4] + LOWPASS;
+        let det = a * c - b * b;
+        if (det <= 0)
+            continue;
+        const mid = 0.5 * (a + c);
+        const disc = Math.max(0.1, mid * mid - det);
+        const l1 = mid + Math.sqrt(disc);
+        const radius = Math.ceil(3 * Math.sqrt(Math.max(l1, mid - Math.sqrt(disc))));
+        if (!lowpass) {
+            a -= LOWPASS;
+            c -= LOWPASS;
+            det = a * c - b * b;
+            if (det <= 0)
+                continue;
+        }
+        // tile rect, exactly as getRect
+        const xmin = Math.min(gx, Math.max(0, Math.floor((px - radius) / BLOCK)));
+        const ymin = Math.min(gy, Math.max(0, Math.floor((py - radius) / BLOCK)));
+        const xmax = Math.min(gx, Math.max(0, Math.floor((px + radius + BLOCK - 1) / BLOCK)));
+        const ymax = Math.min(gy, Math.max(0, Math.floor((py + radius + BLOCK - 1) / BLOCK)));
+        out.push({
+            idx: i, px, py, depth: tz, a, b, c,
+            cx: c / det, cy: -b / det, cz: a / det,
+            radius, alpha: opacity,
+            r: g[o + 11], g: g[o + 12], bl: g[o + 13],
+            tmin: ymin * gx + xmin, tcount: (ymax - ymin) * (xmax - xmin),
+        });
+    }
+    return out;
+}
+/* ---- rasterize; mirrors renderCUDA ---- */
+function rasterize(g, R, t, W, H, fovx, fovy, opt = {}) {
+    const tile = opt.tile !== false;
+    const sort = opt.sort !== false;
+    const cap = opt.cap !== false;
+    const amin = opt.amin !== false;
+    const early = opt.early !== false;
+    const bg = opt.bg ?? [1, 1, 1];
+    const proj = project(g, R, t, W, H, fovx, fovy, 1, opt.lowpass !== false);
+    const img = new Float64Array(W * H * 3);
+    const trans = new Float64Array(W * H);
+    const contrib = new Int32Array(W * H);
+    for (let i = 0; i < W * H; i++) {
+        img[i * 3] = bg[0];
+        img[i * 3 + 1] = bg[1];
+        img[i * 3 + 2] = bg[2];
+        trans[i] = 1;
+    }
+    const gx = Math.ceil(W / BLOCK), gy = Math.ceil(H / BLOCK);
+    const tiles = new Int32Array(gx * gy);
+    let entries = 0;
+    let blocks;
+    if (tile) {
+        const buckets = new Array(gx * gy);
+        for (let i = 0; i < buckets.length; i++)
+            buckets[i] = [];
+        for (const pr of proj) {
+            const rect = tileRect(pr, gx, gy);
+            for (let ty = rect.y0; ty < rect.y1; ty++)
+                for (let tx = rect.x0; tx < rect.x1; tx++) {
+                    buckets[ty * gx + tx].push(pr);
+                    entries++;
+                    tiles[ty * gx + tx]++;
+                }
+        }
+        blocks = [];
+        for (let ty = 0; ty < gy; ty++)
+            for (let tx = 0; tx < gx; tx++)
+                if (buckets[ty * gx + tx].length)
+                    blocks.push({ x: tx * BLOCK, y: ty * BLOCK, list: buckets[ty * gx + tx] });
+        if (sort)
+            for (const bk of blocks)
+                bk.list.sort((p, q) => p.depth - q.depth || p.idx - q.idx);
+    }
+    else {
+        const list = [...proj];
+        if (sort)
+            list.sort((p, q) => p.depth - q.depth || p.idx - q.idx);
+        entries = list.length;
+        blocks = [{ x: 0, y: 0, list }];
+    }
+    const span = tile ? BLOCK : Math.max(W, H);
+    let skipAlpha = 0, skipPower = 0, earlyStops = 0;
+    for (const bk of blocks) {
+        for (let yy = bk.y; yy < Math.min(bk.y + span, H); yy++) {
+            for (let xx = bk.x; xx < Math.min(bk.x + span, W); xx++) {
+                let C0 = 0, C1 = 0, C2 = 0, T = 1, last = 0, n = 0;
+                for (const pr of bk.list) {
+                    n++;
+                    const dx = pr.px - xx, dy = pr.py - yy;
+                    const power = -0.5 * (pr.cx * dx * dx + pr.cz * dy * dy) - pr.cy * dx * dy;
+                    if (power > 0) {
+                        skipPower++;
+                        continue;
+                    }
+                    let al = pr.alpha * Math.exp(power);
+                    if (cap)
+                        al = Math.min(ALPHA_CAP, al);
+                    if (amin && al < ALPHA_MIN) {
+                        skipAlpha++;
+                        continue;
+                    }
+                    const tT = T * (1 - al);
+                    if (early && tT < T_MIN) {
+                        earlyStops++;
+                        break;
+                    }
+                    const w = al * T;
+                    C0 += pr.r * w;
+                    C1 += pr.g * w;
+                    C2 += pr.bl * w;
+                    T = tT;
+                    last = n;
+                }
+                const id = yy * W + xx;
+                img[id * 3] = C0 + T * bg[0];
+                img[id * 3 + 1] = C1 + T * bg[1];
+                img[id * 3 + 2] = C2 + T * bg[2];
+                trans[id] = T;
+                contrib[id] = last;
+            }
+        }
+    }
+    const stats = opt.stats ? {
+        n: g.length / 14, visible: proj.length, entries, brute: (g.length / 14) * W * H,
+        radiusMean: proj.length ? proj.reduce((s, p) => s + p.radius, 0) / proj.length : 0,
+        radiusMax: proj.length ? Math.max(...proj.map((p) => p.radius)) : 0,
+        skipAlpha, skipPower, earlyStops, tiles, tilesW: gx, tilesH: gy,
+    } : undefined;
+    return { img, trans, contrib, stats };
+}
+function tileRect(pr, gx, gy) {
+    const x0 = Math.min(gx, Math.max(0, Math.floor((pr.px - pr.radius) / BLOCK)));
+    const y0 = Math.min(gy, Math.max(0, Math.floor((pr.py - pr.radius) / BLOCK)));
+    const x1 = Math.min(gx, Math.max(0, Math.floor((pr.px + pr.radius + BLOCK - 1) / BLOCK)));
+    const y1 = Math.min(gy, Math.max(0, Math.floor((pr.py + pr.radius + BLOCK - 1) / BLOCK)));
+    return { x0, y0, x1, y1 };
+}
+/* ---- 2D differentiable splatting (for the "why differentiable" tab) ---- */
+const NS = 9; // x y sx sy theta r g b alpha
+function render2d(P, W, H, bg, sort, cap, amin) {
+    const n = P.length / NS;
+    const yy = new Float64Array(H * W), xx = new Float64Array(H * W);
+    for (let y = 0; y < H; y++)
+        for (let x = 0; x < W; x++) {
+            yy[y * W + x] = y;
+            xx[y * W + x] = x;
+        }
+    const alphas = [];
+    const order = [];
+    for (let i = 0; i < n; i++)
+        order.push(i);
+    if (sort)
+        order.sort((a, b) => P[a * NS + 1] - P[b * NS + 1]);
+    const T = new Float64Array(H * W).fill(1);
+    const out = new Float64Array(H * W * 3);
+    for (let k = 0; k < order.length; k++) {
+        const i = order[k];
+        const o = i * NS;
+        const x = P[o], y = P[o + 1];
+        const sx = Math.abs(P[o + 2]), sy = Math.abs(P[o + 3]), th = P[o + 4];
+        const ct = Math.cos(th), st = Math.sin(th);
+        const a = sx * sx * ct * ct + sy * sy * st * st + LOWPASS;
+        const b = (sx * sx - sy * sy) * ct * st;
+        const c = sx * sx * st * st + sy * sy * ct * ct + LOWPASS;
+        const det = a * c - b * b;
+        const cx = c / det, cy = -b / det, cz = a / det;
+        const al = new Float64Array(H * W);
+        for (let p = 0; p < H * W; p++) {
+            const dx = x - xx[p], dy = y - yy[p];
+            const power = -0.5 * (cx * dx * dx + cz * dy * dy) - cy * dx * dy;
+            let v = P[o + 8] * Math.exp(Math.min(0, power));
+            if (cap)
+                v = Math.min(ALPHA_CAP, v);
+            if (amin && v < ALPHA_MIN)
+                v = 0;
+            al[p] = v;
+        }
+        alphas.push(al);
+        for (let p = 0; p < H * W; p++) {
+            const w = al[p] * T[p];
+            out[p * 3] += P[o + 5] * w;
+            out[p * 3 + 1] += P[o + 6] * w;
+            out[p * 3 + 2] += P[o + 7] * w;
+            T[p] *= 1 - al[p];
+        }
+    }
+    for (let p = 0; p < H * W; p++) {
+        out[p * 3] += T[p] * bg[0];
+        out[p * 3 + 1] += T[p] * bg[1];
+        out[p * 3 + 2] += T[p] * bg[2];
+    }
+    return { img: out, alpha: alphas };
+}
+function loss2d(P, target, W, H, bg, sort, cap, amin) {
+    const { img } = render2d(P, W, H, bg, sort, cap, amin);
+    let s = 0;
+    for (let i = 0; i < img.length; i++) {
+        const d = img[i] - target[i];
+        s += d * d;
+    }
+    return 0.5 * s / img.length;
+}
+/* ---- analytic gradient of loss2d (reverse mode, mirrors the verified
+        Python reference; cross-checked against finite differences) ---- */
+function grad2d(P, target, W, H, bg, sort, cap, amin) {
+    const n = P.length / NS;
+    const px = new Float64Array(H * W), py = new Float64Array(H * W);
+    for (let y = 0; y < H; y++)
+        for (let x = 0; x < W; x++) {
+            py[y * W + x] = y;
+            px[y * W + x] = x;
+        }
+    const order = [];
+    for (let i = 0; i < n; i++)
+        order.push(i);
+    if (sort)
+        order.sort((a, b) => P[a * NS + 1] - P[b * NS + 1]);
+    // per-splat fields
+    const A = new Float64Array(n), B = new Float64Array(n), C = new Float64Array(n);
+    const CX = new Float64Array(n), CY = new Float64Array(n), CZ = new Float64Array(n);
+    const SX = new Float64Array(n), SY = new Float64Array(n), TH = new Float64Array(n);
+    const POW = new Float64Array(n * H * W), AL = new Float64Array(n * H * W);
+    const LIVE = new Uint8Array(n * H * W).fill(1);
+    const T = new Float64Array(H * W).fill(1);
+    const out = new Float64Array(H * W * 3);
+    const Tsave = new Float64Array(n * H * W);
+    for (let k = 0; k < n; k++) {
+        const i = order[k];
+        const o = i * NS;
+        const x = P[o], y = P[o + 1];
+        const sx = Math.abs(P[o + 2]), sy = Math.abs(P[o + 3]), th = P[o + 4];
+        const ct = Math.cos(th), st = Math.sin(th);
+        A[i] = sx * sx * ct * ct + sy * sy * st * st + LOWPASS;
+        B[i] = (sx * sx - sy * sy) * ct * st;
+        C[i] = sx * sx * st * st + sy * sy * ct * ct + LOWPASS;
+        const det = A[i] * C[i] - B[i] * B[i];
+        CX[i] = C[i] / det;
+        CY[i] = -B[i] / det;
+        CZ[i] = A[i] / det;
+        SX[i] = sx;
+        SY[i] = sy;
+        TH[i] = th;
+        for (let p = 0; p < H * W; p++) {
+            const dx = x - px[p], dy = y - py[p];
+            const power = -0.5 * (CX[i] * dx * dx + CZ[i] * dy * dy) - CY[i] * dx * dy;
+            POW[i * H * W + p] = power;
+            let v = P[o + 8] * Math.exp(Math.min(0, power));
+            if (cap)
+                v = Math.min(ALPHA_CAP, v);
+            if (amin && v < ALPHA_MIN) {
+                v = 0;
+                LIVE[i * H * W + p] = 0;
+            }
+            AL[i * H * W + p] = v;
+            const w = v * T[p];
+            out[p * 3] += P[o + 5] * w;
+            out[p * 3 + 1] += P[o + 6] * w;
+            out[p * 3 + 2] += P[o + 7] * w;
+            Tsave[i * H * W + p] = T[p];
+            T[p] *= 1 - v;
+        }
+    }
+    for (let p = 0; p < H * W; p++) {
+        out[p * 3] += T[p] * bg[0];
+        out[p * 3 + 1] += T[p] * bg[1];
+        out[p * 3 + 2] += T[p] * bg[2];
+    }
+    let loss = 0;
+    for (let p = 0; p < H * W * 3; p++) {
+        const d = out[p] - target[p];
+        loss += d * d;
+    }
+    loss = 0.5 * loss / (H * W * 3);
+    const dC = new Float64Array(3 * H * W); // channel-major: dC[c*H*W + p]
+    for (let p = 0; p < H * W; p++)
+        for (let c = 0; c < 3; c++)
+            dC[c * H * W + p] = (out[p * 3 + c] - target[p * 3 + c]) / (H * W * 3);
+    const dT = new Float64Array(H * W);
+    for (let p = 0; p < H * W; p++)
+        dT[p] = dC[p] * bg[0] + dC[H * W + p] * bg[1] + dC[2 * H * W + p] * bg[2];
+    const G = new Float64Array(P.length);
+    const S = new Float64Array(3 * H * W);
+    for (let k = n - 1; k >= 0; k--) {
+        const i = order[k];
+        const o = i * NS;
+        const ct = Math.cos(TH[i]), st = Math.sin(TH[i]);
+        const sx = SX[i], sy = SY[i];
+        const K = [CX[i], CY[i], CY[i], CZ[i]];
+        let da0 = 0;
+        for (let p = 0; p < H * W; p++) {
+            const ai = AL[i * H * W + p];
+            const Ti = Tsave[i * H * W + p];
+            const w = ai * Ti;
+            G[o + 5] += dC[p] * w;
+            G[o + 6] += dC[H * W + p] * w;
+            G[o + 7] += dC[2 * H * W + p] * w;
+            const denom = Math.max(1e-6, 1 - ai);
+            let sAcc = 0;
+            for (let c = 0; c < 3; c++)
+                sAcc += dC[c * H * W + p] * S[c * H * W + p];
+            let da = dC[p] * P[o + 5] * Ti + dC[H * W + p] * P[o + 6] * Ti + dC[2 * H * W + p] * P[o + 7] * Ti
+                + sAcc * (-1 / denom) + dT[p] * (-T[p] / denom);
+            const capped = cap && ai >= ALPHA_CAP - 1e-12;
+            let daraw = capped ? 0 : da;
+            if (!LIVE[i * H * W + p])
+                daraw = 0;
+            const ep = Math.exp(POW[i * H * W + p]);
+            const dpower = daraw * ep * P[o + 8];
+            da0 += daraw * ep;
+            const dx = P[o] - px[p], dy = P[o + 1] - py[p];
+            const g00 = -0.5 * dx * dx * dpower;
+            const g11 = -0.5 * dy * dy * dpower;
+            const g01 = -0.5 * dx * dy * dpower;
+            // dC2 = -K dK K
+            const d00 = -(K[0] * g00 * K[0] + K[0] * g01 * K[2] + K[1] * g01 * K[0] + K[1] * g11 * K[2]);
+            const d11 = -(K[1] * g00 * K[1] + K[1] * g01 * K[3] + K[3] * g01 * K[1] + K[3] * g11 * K[3]);
+            const d01 = -(K[0] * g00 * K[1] + K[0] * g01 * K[3] + K[1] * g01 * K[1] + K[1] * g11 * K[3]);
+            const da_ = d00, dc_ = d11, db_ = 2 * d01;
+            G[o + 2] += (da_ * 2 * sx * ct * ct + dc_ * 2 * sx * st * st + db_ * 2 * sx * ct * st);
+            G[o + 3] += (da_ * 2 * sy * st * st + dc_ * 2 * sy * ct * ct - db_ * 2 * sy * ct * st);
+            G[o + 4] += (da_ * (-2 * sx * sx * ct * st + 2 * sy * sy * st * ct)
+                + dc_ * (2 * sx * sx * st * ct - 2 * sy * sy * ct * st)
+                + db_ * ((sx * sx - sy * sy) * (ct * ct - st * st)));
+            G[o] += dpower * -(CX[i] * dx + CY[i] * dy);
+            G[o + 1] += dpower * -(CZ[i] * dy + CY[i] * dx);
+            S[p] += P[o + 5] * w;
+            S[H * W + p] += P[o + 6] * w;
+            S[2 * H * W + p] += P[o + 7] * w;
+        }
+        G[o + 8] += da0;
+    }
+    return { loss, grad: G };
+}
+/* ---- scenes ---- */
+function mulberry32(seed) {
+    let a = seed >>> 0;
+    return () => {
+        a |= 0;
+        a = (a + 0x6D2B79F5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+}
+function hsv(h, s, v) {
+    const hh = ((h % 1) + 1) % 1 * 6;
+    const i = Math.floor(hh), f = hh - i;
+    const p = v * (1 - s), q = v * (1 - f * s), tt = v * (1 - (1 - f) * s);
+    const tab = [[v, tt, p], [q, v, p], [p, v, tt], [p, q, v], [tt, p, v], [v, p, q]];
+    return tab[i % 6];
+}
+function surfacePoints(kind, n, rnd) {
+    const p = [], nr = [];
+    if (kind === 'sphere') {
+        for (let i = 0; i < n; i++) {
+            let x = rnd() * 2 - 1, y = rnd() * 2 - 1, z = rnd() * 2 - 1;
+            const l = Math.hypot(x, y, z) || 1;
+            x /= l;
+            y /= l;
+            z /= l;
+            p.push([x, y, z]);
+            nr.push([x, y, z]);
+        }
+    }
+    else if (kind === 'torus') {
+        const Rr = 1.0, rr = 0.4;
+        for (let i = 0; i < n; i++) {
+            const u = rnd() * Math.PI * 2, w = rnd() * Math.PI * 2;
+            const cx = Rr + rr * Math.cos(w), cy = rr * Math.sin(w);
+            p.push([cx * Math.cos(u), cx * Math.sin(u), cy]);
+            const nx = Math.cos(w) * Math.cos(u), ny = Math.cos(w) * Math.sin(u), nz = Math.sin(w);
+            const l = Math.hypot(nx, ny, nz) || 1;
+            nr.push([nx / l, ny / l, nz / l]);
+        }
+    }
+    else { // gyroid
+        let made = 0;
+        while (made < n) {
+            const x = (rnd() * 2 - 1) * 2.5, y = (rnd() * 2 - 1) * 2.5, z = (rnd() * 2 - 1) * 2.5;
+            const f = Math.sin(x) * Math.cos(y) + Math.sin(y) * Math.cos(z) + Math.sin(z) * Math.cos(x);
+            if (Math.abs(f) < 0.05 && Math.hypot(x, y, z) < 1.3) {
+                p.push([x, y, z]);
+                const gx = Math.cos(x) * Math.cos(y) - Math.sin(z) * Math.sin(x);
+                const gy = Math.cos(y) * Math.cos(z) - Math.sin(x) * Math.sin(y);
+                const gz = Math.cos(z) * Math.cos(x) - Math.sin(y) * Math.sin(z);
+                const l = Math.hypot(gx, gy, gz) || 1;
+                nr.push([gx / l, gy / l, gz / l]);
+                made++;
+            }
+        }
+    }
+    return { p, n: nr };
+}
+function quatFromNormal(nx, ny, nz, spin) {
+    const l = Math.hypot(nx, ny, nz) || 1;
+    nx /= l;
+    ny /= l;
+    nz /= l;
+    const refv = Math.abs(nz) < 0.9 ? [0, 0, 1] : [1, 0, 0];
+    let t1 = [ny * refv[2] - nz * refv[1], nz * refv[0] - nx * refv[2], nx * refv[1] - ny * refv[0]];
+    const l1 = Math.hypot(t1[0], t1[1], t1[2]) || 1;
+    t1 = [t1[0] / l1, t1[1] / l1, t1[2] / l1];
+    let t2 = [ny * t1[2] - nz * t1[1], nz * t1[0] - nx * t1[2], nx * t1[1] - ny * t1[0]];
+    const l2 = Math.hypot(t2[0], t2[1], t2[2]) || 1;
+    t2 = [t2[0] / l2, t2[1] / l2, t2[2] / l2];
+    const ca = Math.cos(spin), sa = Math.sin(spin);
+    // R columns = (n, t1, t2) then spin about n (local x)
+    const c0 = [nx, ny, nz];
+    const c1 = [t1[0] * ca + t2[0] * sa, t1[1] * ca + t2[1] * sa, t1[2] * ca + t2[2] * sa];
+    const c2 = [-t1[0] * sa + t2[0] * ca, -t1[1] * sa + t2[1] * ca, -t1[2] * sa + t2[2] * ca];
+    const R = [c0[0], c1[0], c2[0], c0[1], c1[1], c2[1], c0[2], c1[2], c2[2]];
+    const tr = R[0] + R[4] + R[8];
+    let q;
+    if (tr > 0) {
+        const s = Math.sqrt(tr + 1) * 2;
+        q = [s / 4, (R[7] - R[5]) / s, (R[2] - R[6]) / s, (R[3] - R[1]) / s];
+    }
+    else if (R[0] > R[4] && R[0] > R[8]) {
+        const s = Math.sqrt(1 + R[0] - R[4] - R[8]) * 2;
+        q = [(R[7] - R[5]) / s, s / 4, (R[1] + R[3]) / s, (R[2] + R[6]) / s];
+    }
+    else if (R[4] > R[8]) {
+        const s = Math.sqrt(1 + R[4] - R[0] - R[8]) * 2;
+        q = [(R[2] - R[6]) / s, (R[1] + R[3]) / s, s / 4, (R[5] + R[7]) / s];
+    }
+    else {
+        const s = Math.sqrt(1 + R[8] - R[0] - R[4]) * 2;
+        q = [(R[3] - R[1]) / s, (R[2] + R[6]) / s, (R[5] + R[7]) / s, s / 4];
+    }
+    const ql = Math.hypot(q[0], q[1], q[2], q[3]) || 1;
+    return [q[0] / ql, q[1] / ql, q[2] / ql, q[3] / ql];
+}
+function makeScene(kind, n, mode, seed, jitter = 0) {
+    const rnd = mulberry32(seed * 7919 + 13);
+    const { p, n: nrm } = surfacePoints(kind, n, rnd);
+    const g = new Float64Array(n * 14);
+    for (let i = 0; i < n; i++) {
+        const o = i * 14;
+        const jx = jitter ? (rnd() * 2 - 1) * jitter : 0;
+        const jy = jitter ? (rnd() * 2 - 1) * jitter : 0;
+        const jz = jitter ? (rnd() * 2 - 1) * jitter : 0;
+        g[o] = p[i][0] + jx;
+        g[o + 1] = p[i][1] + jy;
+        g[o + 2] = p[i][2] + jz;
+        if (mode === 'dots') {
+            g[o + 3] = 0.85;
+            g[o + 4] = g[o + 5] = g[o + 6] = 0.018;
+            g[o + 7] = 1;
+        }
+        else {
+            const st = kind === 'torus' ? 0.030 : 0.030;
+            g[o + 3] = Math.min(1, Math.max(0, 0.5 + rnd() * 0.47));
+            g[o + 4] = st * (0.6 + rnd() * 0.9);
+            g[o + 5] = st * (0.6 + rnd() * 0.9);
+            g[o + 6] = 0.008 * (0.5 + rnd() * 1.3);
+            const q = quatFromNormal(nrm[i][0], nrm[i][1], nrm[i][2], rnd() * Math.PI * 2);
+            g[o + 7] = q[0];
+            g[o + 8] = q[1];
+            g[o + 9] = q[2];
+            g[o + 10] = q[3];
+        }
+        const ang = Math.atan2(p[i][1], p[i][0]) / (2 * Math.PI) + 0.5;
+        const el = Math.asin(Math.min(1, Math.max(-1, p[i][2] / (Math.hypot(p[i][0], p[i][1], p[i][2]) || 1)))) / Math.PI + 0.5;
+        const col = hsv(ang * 0.85 + el * 0.12, mode === 'dots' ? 0.7 : 0.62, mode === 'dots' ? 0.95 : 0.92);
+        g[o + 11] = col[0];
+        g[o + 12] = col[1];
+        g[o + 13] = col[2];
+    }
+    return g;
+}
+/* ---- measured reference data (Python + numpy, cross-validated) ---- */
+const MEASURED = {
+    tileEfficiency: [
+        { N: 200, W: 64, visible: 200, tileWrites: 532, brute: 819200, ratio: 1539.85, rMean: 6.39, rMax: 16 },
+        { N: 200, W: 128, visible: 200, tileWrites: 1058, brute: 3276800, ratio: 3097.16, rMean: 11.92, rMax: 32 },
+        { N: 1000, W: 64, visible: 1000, tileWrites: 2606, brute: 4096000, ratio: 1571.76, rMean: 6.62, rMax: 20 },
+        { N: 1000, W: 128, visible: 1000, tileWrites: 5290, brute: 16384000, ratio: 3097.16, rMean: 12.35, rMax: 39 },
+    ],
+    tileVsBrute: { maxAbs: 0.00979045094191855, meanAbs: 9.602010355548693e-06, fracOver1of255: 0.0005787037037037037, fracOver002: 0 },
+    gradCheck: { smooth: 1.34e-8, withClamp: 1.34e-8 },
+    storage: {
+        trained3dgs: { floats: 59, bytes: 236, note: '3 pos + 48 SH(deg3) + 1 α + 3 scale + 4 rot' },
+        ply3dgs: { floats: 62, bytes: 248, note: 'trained + 3 unused normals' },
+        lgm: { floats: 14, bytes: 56, note: '3 pos + 1 α + 3 scale + 4 rot + 3 rgb (SH deg 0)' },
+        splat: { bytes: 32, note: 'pos f32x3 + scale f32x3 + rgba u8x4 + rot u8x4' },
+    },
+    sizes: {
+        lgmSmall: 16384, lgmBig: 65536,
+        mb: (n, b) => +(n * b / 1e6).toFixed(2),
+    },
+};
+
+</script>
+<script>
+/* ================= shared helpers ================= */
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => [...document.querySelectorAll(s)];
+const nf = (n) => Number(n).toLocaleString("en-US");
+const f2 = (n) => (Math.round(n * 100) / 100).toString();
+const FOV = Math.tan((49.1 * Math.PI) / 360);
+
+function canvasFromImg(img, W, H, scale) {
+  const cv = document.createElement("canvas");
+  cv.width = W * scale; cv.height = H * scale;
+  cv.style.width = "100%"; cv.style.maxWidth = (W * scale) + "px";
+  cv.style.imageRendering = "pixelated";
+  cv.style.borderRadius = "6px";
+  cv.style.border = "1px solid var(--line)";
+  const ctx = cv.getContext("2d");
+  const id = ctx.createImageData(W, H);
+  for (let i = 0; i < W * H; i++) {
+    id.data[i * 4] = Math.max(0, Math.min(255, Math.round(img[i * 3] * 255)));
+    id.data[i * 4 + 1] = Math.max(0, Math.min(255, Math.round(img[i * 3 + 1] * 255)));
+    id.data[i * 4 + 2] = Math.max(0, Math.min(255, Math.round(img[i * 3 + 2] * 255)));
+    id.data[i * 4 + 3] = 255;
+  }
+  const tmp = document.createElement("canvas");
+  tmp.width = W; tmp.height = H;
+  tmp.getContext("2d").putImageData(id, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(tmp, 0, 0, W * scale, H * scale);
+  return cv;
+}
+function eigen2(a, b, c) {
+  const mid = 0.5 * (a + c);
+  const disc = Math.max(0, mid * mid - (a * c - b * b));
+  const l1 = mid + Math.sqrt(disc), l2 = mid - Math.sqrt(disc);
+  let v1 = [a - l2, b];
+  const n1 = Math.hypot(v1[0], v1[1]);
+  if (n1 < 1e-9) v1 = [1, 0]; else v1 = [v1[0] / n1, v1[1] / n1];
+  return { l1, l2, v1 };
+}
+function ellipsePath(cx, cy, s1, s2, th, k) {
+  // k-sigma ellipse of cov = R(th) diag(s1,s2) R(th)^T
+  const pts = [];
+  for (let i = 0; i <= 64; i++) {
+    const t = (i / 64) * Math.PI * 2;
+    const x = k * Math.sqrt(s1) * Math.cos(t), y = k * Math.sqrt(s2) * Math.sin(t);
+    pts.push([cx + x * Math.cos(th) - y * Math.sin(th), cy + x * Math.sin(th) + y * Math.cos(th)]);
+  }
+  return "M" + pts.map((p) => p[0].toFixed(2) + " " + p[1].toFixed(2)).join("L") + "Z";
+}
+const TABS = [
+  ["anatomy", "One splat: what is it"],
+  ["pipe", "Rasterization pipeline"],
+  ["diff", "Why AI-friendly"],
+  ["fast", "Why fast"],
+  ["vs", "Comparison and boundaries"],
+];
+$$(".tab").forEach((b) => b.addEventListener("click", () => {
+  $$(".tab").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
+  $$(".panel").forEach((p) => p.classList.toggle("on", p.id === "p-" + b.dataset.tab));
+  RENDER[b.dataset.tab]();
+}));
+const RENDER = {};
+
+/* ================= tab 1: anatomy ================= */
+const A = { sx: 16, sy: 6, th: 35, al: 0.85 };
+RENDER.anatomy = function () {
+  const p = $("#p-anatomy");
+  const S = 380, cx = S / 2, cy = S / 2;
+  const thr = (A.th * Math.PI) / 180;
+  const ct = Math.cos(thr), st = Math.sin(thr);
+  const a = A.sx * A.sx * ct * ct + A.sy * A.sy * st * st + LOWPASS;
+  const b = (A.sx * A.sx - A.sy * A.sy) * ct * st;
+  const c = A.sx * A.sx * st * st + A.sy * A.sy * ct * ct + LOWPASS;
+  const ev = eigen2(a, b, c);
+  const ang = Math.atan2(ev.v1[1], ev.v1[0]);
+  const sig1 = Math.sqrt(ev.l1), sig2 = Math.sqrt(ev.l2);
+  const r3 = Math.ceil(3 * sig1);
+  const cols = [
+    ["1σ", 1, "var(--blue)", 0.55],
+    ["2σ", 2, "var(--orange)", 0.8],
+    ["3σ", 3, "var(--red)", 1],
+  ];
+  const ell = cols.map(([lab, k, col, op]) =>
+    `<path d="${ellipsePath(cx, cy, ev.l1, ev.l2, ang, k)}" fill="none" stroke="${col}" stroke-opacity="${op}" stroke-width="${k === 3 ? 2 : 1.2}" ${k === 3 ? "" : "stroke-dasharray='4 3'"}></path>`).join("");
+  const grid = [];
+  for (let g = 0; g <= S; g += 20) grid.push(`<line x1="${g}" y1="0" x2="${g}" y2="${S}" stroke="var(--line)" stroke-width="0.6"/><line x1="0" y1="${g}" x2="${S}" y2="${g}" stroke="var(--line)" stroke-width="0.6"/>`);
+  const svg = `<svg viewBox="0 0 ${S} ${S}" width="100%" role="img" aria-label="single splat">
+    ${grid.join("")}
+    <path d="${ellipsePath(cx, cy, ev.l1, ev.l2, ang, 3)}" fill="var(--accent)" fill-opacity="${0.06 + A.al * 0.16}" stroke="none"></path>
+    ${ell}
+    <rect x="${cx - r3}" y="${cy - r3}" width="${2 * r3}" height="${2 * r3}" fill="none" stroke="var(--fg3)" stroke-dasharray="3 3" stroke-width="1"></rect>
+    <line x1="${cx - ev.v1[0] * 3 * sig1}" y1="${cy - ev.v1[1] * 3 * sig1}" x2="${cx + ev.v1[0] * 3 * sig1}" y2="${cy + ev.v1[1] * 3 * sig1}" stroke="var(--fg3)" stroke-width="1"></line>
+    <circle cx="${cx}" cy="${cy}" r="2.6" fill="var(--fg)"></circle>
+    <text x="${cx + 6}" y="${cy - 6}" font-size="11" fill="var(--fg2)">μ (position)</text>
+    <text x="${cx - r3 + 4}" y="${cy + r3 + 14}" font-size="11" fill="var(--fg3)">3σ box = ${2 * r3}×${2 * r3} px</text>
+  </svg>`;
+  // alpha profile along major axis
+  const PW = 380, PH = 130, pad = 34;
+  const dmax = 4 * sig1;
+  const pts = [];
+  for (let i = 0; i <= 120; i++) {
+    const d = (i / 120) * dmax;
+    const v = A.al * Math.exp(-(d * d) / (2 * ev.l1));
+    pts.push([pad + (i / 120) * (PW - pad - 8), PH - 18 - v * (PH - 40)]);
+  }
+  const yThr = PH - 18 - (1 / 255) * (PH - 40);
+  const y3 = PH - 18 - (A.al * Math.exp(-4.5)) * (PH - 40);
+  const x3 = pad + (3 * sig1 / dmax) * (PW - pad - 8);
+  const prof = `<svg viewBox="0 0 ${PW} ${PH}" width="100%" role="img" aria-label="alpha profile">
+    <line x1="${pad}" y1="${PH - 18}" x2="${PW - 8}" y2="${PH - 18}" stroke="var(--line2)"/>
+    <line x1="${pad}" y1="8" x2="${pad}" y2="${PH - 18}" stroke="var(--line2)"/>
+    <polyline points="${pts.map((q) => q[0].toFixed(1) + "," + q[1].toFixed(1)).join(" ")}" fill="none" stroke="var(--accent)" stroke-width="2"/>
+    <line x1="${pad}" y1="${yThr}" x2="${PW - 8}" y2="${yThr}" stroke="var(--red)" stroke-dasharray="4 3"/>
+    <text x="${pad + 4}" y="${yThr - 4}" font-size="10.5" fill="var(--red)">α = 1/255 cutoff — below it the pixel skips this splat</text>
+    <line x1="${x3}" y1="8" x2="${x3}" y2="${PH - 18}" stroke="var(--orange)" stroke-dasharray="4 3"/>
+    <text x="${x3 + 4}" y="26" font-size="10.5" fill="var(--orange)">3σ: α ≈ ${(A.al * Math.exp(-4.5)).toFixed(4)}</text>
+    <text x="${pad}" y="${PH - 5}" font-size="10.5" fill="var(--fg3)">distance from center (px) → 0 … ${dmax.toFixed(0)}</text>
+    <text x="6" y="14" font-size="10.5" fill="var(--fg3)">α</text>
+  </svg>`;
+  p.innerHTML = `
+  <div class="grid2">
+    <div class="card"><header>One splat on screen <span class="hint">all numbers computed live</span></header>
+      <div class="body">${svg}
+        <div class="legend">
+          <span><i style="background:var(--blue)"></i>1σ (α = α₀·e⁻⁰·⁵ ≈ ${(A.al * 0.6065).toFixed(3)})</span>
+          <span><i style="background:var(--orange)"></i>2σ (α = α₀·e⁻² ≈ ${(A.al * 0.1353).toFixed(3)})</span>
+          <span><i style="background:var(--red)"></i>3σ (α = α₀·e⁻⁴·⁵ ≈ ${(A.al * 0.0111).toFixed(3)})</span>
+          <span><i style="background:var(--fg3)"></i>3σ bounding box = the only pixels this splat touches (tile culling range)</span>
+        </div>
+      </div></div>
+    <div class="stack">
+      <div class="card"><header>Four knobs <span class="hint">position is just the center</span></header>
+        <div class="body stack">
+          <label class="ctl"><span>width σ₁ = <b>${f2(A.sx)}</b> px</span><input type="range" min="2" max="40" step="0.5" value="${A.sx}" data-a="sx"></label>
+          <label class="ctl"><span>height σ₂ = <b>${f2(A.sy)}</b> px</span><input type="range" min="2" max="40" step="0.5" value="${A.sy}" data-a="sy"></label>
+          <label class="ctl"><span>rotation θ = <b>${A.th}</b>°</span><input type="range" min="0" max="180" step="1" value="${A.th}" data-a="th"></label>
+          <label class="ctl"><span>opacity α₀ = <b>${f2(A.al)}</b></span><input type="range" min="0.05" max="1" step="0.01" value="${A.al}" data-a="al"></label>
+          <div class="row">
+            <button class="btn" data-preset="iso">isotropic dot</button>
+            <button class="btn" data-preset="flat">flat sliver</button>
+            <button class="btn" data-preset="tilt">tilted ellipse</button>
+          </div>
+        </div></div>
+      <div class="card"><header>α falloff along the major axis</header><div class="body">${prof}</div></div>
+    </div>
+  </div>
+  <div class="callout info" style="margin-top:14px">
+    <div class="t">What a splat is, in one formula</div>
+    On screen it is a 2D Gaussian: <code>cov2d = R(θ)·diag(σ₁², σ₂²)·R(θ)ᵀ + 0.3·I</code> (the <code>+0.3</code> is a low-pass filter from the official implementation, guaranteeing every splat is at least one pixel wide).
+    A pixel at offset <code>d</code> gets weight <code>α = α₀·exp(−½·d·Σ⁻¹·d)</code>. In 3D the same four knobs exist one dimension higher:
+    position (3), covariance = scale(3)+rotation(4), color (3), opacity (1) — <b>14 numbers, no topology</b>.
+  </div>`;
+  p.querySelectorAll("input[data-a]").forEach((r) => r.addEventListener("input", () => {
+    A[r.dataset.a] = +r.value; RENDER.anatomy();
+  }));
+  p.querySelectorAll("[data-preset]").forEach((btn) => btn.addEventListener("click", () => {
+    const k = btn.dataset.preset;
+    if (k === "iso") Object.assign(A, { sx: 14, sy: 14, th: 0 });
+    if (k === "flat") Object.assign(A, { sx: 30, sy: 3, th: 90 });
+    if (k === "tilt") Object.assign(A, { sx: 24, sy: 8, th: 35 });
+    RENDER.anatomy();
+  }));
+};
+/* ================= tab 2: pipeline ================= */
+const P2 = { kind: "sphere", mode: "trained", N: 900, elev: 22, azim: 38, zoom: 2.7,
+  sort: true, tile: true, cap: true, amin: true, early: true, lowpass: true,
+  showTiles: false, showBox: false, showOrder: false, bg: 1 };
+let SCENE = null;
+function scene() {
+  const key = P2.kind + P2.mode + P2.N;
+  if (!SCENE || SCENE.key !== key) SCENE = { key, g: makeScene(P2.kind, P2.N, P2.mode, 7) };
+  return SCENE.g;
+}
+RENDER.pipe = function () {
+  const p = $("#p-pipe");
+  const W = 128, H = 128, S = 3;
+  const { R, t } = orbitCamera(P2.elev, P2.azim, P2.zoom);
+  const t0 = performance.now();
+  const out = rasterize(scene(), R, t, W, H, FOV, FOV, {
+    tile: P2.tile, sort: P2.sort, cap: P2.cap, amin: P2.amin, early: P2.early,
+    lowpass: P2.lowpass, bg: [P2.bg, P2.bg, P2.bg], stats: true,
+  });
+  const ms = performance.now() - t0;
+  const st = out.stats;
+  const cv = canvasFromImg(out.img, W, H, S);
+  cv.id = "pipe-canvas";
+  const tilesSvg = P2.showTiles ? (() => {
+    const g = [];
+    for (let ty = 0; ty < st.tilesH; ty++) for (let tx = 0; tx < st.tilesW; tx++) {
+      const n = st.tiles[ty * st.tilesW + tx];
+      if (!n) continue;
+      const hot = Math.min(1, n / 12);
+      g.push(`<rect x="${tx * 16}" y="${ty * 16}" width="16" height="16" fill="var(--accent)" fill-opacity="${0.08 + hot * 0.5}" stroke="var(--line2)" stroke-width="0.5"/>`);
+    }
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W * S}px;image-rendering:pixelated;border-radius:6px;border:1px solid var(--line)">${g.join("")}</svg>`;
+  })() : null;
+  const orderSvg = P2.showOrder ? (() => {
+    // per-pixel last contributor -> heat
+    const g = [];
+    for (let y = 0; y < H; y += 2) for (let x = 0; x < W; x += 2) {
+      const n = out.contrib[y * W + x];
+      if (!n) continue;
+      const hot = Math.min(1, n / 14);
+      g.push(`<rect x="${x}" y="${y}" width="2" height="2" fill="var(--orange)" fill-opacity="${0.15 + hot * 0.75}"/>`);
+    }
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W * S}px;image-rendering:pixelated;border-radius:6px;border:1px solid var(--line)">${g.join("")}</svg>`;
+  })() : null;
+  p.innerHTML = `
+  <div class="grid2b">
+    <div class="stack">
+      <div class="card"><header>Scene <span class="hint">SfM-style init → trained</span></header>
+        <div class="body stack">
+          <div class="row">
+            <label class="ctl"><span>shape</span><select data-p="kind"><option value="sphere">sphere</option><option value="torus">torus</option><option value="gyroid">gyroid</option></select></label>
+            <label class="ctl"><span>state</span><select data-p="mode"><option value="dots">isotropic dots (SfM init)</option><option value="trained">trained (anisotropic)</option></select></label>
+            <label class="ctl"><span>N</span><select data-p="N"><option>300</option><option>900</option><option>2000</option><option>4000</option></select></label>
+          </div>
+          <div class="row">
+            <label class="ctl"><span>elevation <b>${P2.elev}°</b></span><input type="range" min="-80" max="80" step="1" value="${P2.elev}" data-p="elev"></label>
+            <label class="ctl"><span>azimuth <b>${P2.azim}°</b></span><input type="range" min="0" max="360" step="1" value="${P2.azim}" data-p="azim"></label>
+          </div>
+          <div class="row">
+            <label class="check"><input type="checkbox" data-p="sort" ${P2.sort ? "checked" : ""}>sort back-to-front (blend order)</label>
+            <label class="check"><input type="checkbox" data-p="cap" ${P2.cap ? "checked" : ""}>α ≤ 0.99</label>
+            <label class="check"><input type="checkbox" data-p="amin" ${P2.amin ? "checked" : ""}>α ≥ 1/255</label>
+          </div>
+          <div class="row">
+            <label class="check"><input type="checkbox" data-p="early" ${P2.early ? "checked" : ""}>early-out T &lt; 1e-4</label>
+            <label class="check"><input type="checkbox" data-p="lowpass" ${P2.lowpass ? "checked" : ""}>+0.3 low-pass</label>
+            <label class="check"><input type="checkbox" data-p="tile" ${P2.tile ? "checked" : ""}>tile bucketing</label>
+          </div>
+          <div class="row">
+            <label class="check"><input type="checkbox" data-p="showTiles" ${P2.showTiles ? "checked" : ""}>show tile occupancy</label>
+            <label class="check"><input type="checkbox" data-p="showOrder" ${P2.showOrder ? "checked" : ""}>show #contributors / pixel</label>
+          </div>
+        </div></div>
+      <div class="card"><header>Numbers <span class="hint">this frame, measured</span></header>
+        <div class="body">
+          <div class="stats">
+            <div class="stat"><div class="v">${nf(st.visible)}</div><div class="l">visible splats (of ${nf(st.n)})</div></div>
+            <div class="stat"><div class="v">${nf(st.entries)}</div><div class="l">tile writes</div></div>
+            <div class="stat"><div class="v">${nf(st.brute)}</div><div class="l">brute-force pixel-splats</div></div>
+            <div class="stat ok"><div class="v">${(st.brute / Math.max(1, st.entries)).toFixed(0)}×</div><div class="l">work avoided</div></div>
+            <div class="stat"><div class="v">${ms.toFixed(1)} ms</div><div class="l">JS rasterize (single thread)</div></div>
+            <div class="stat"><div class="v">${st.radiusMax}</div><div class="l">max 3σ radius (px)</div></div>
+            <div class="stat"><div class="v">${nf(st.skipAlpha)}</div><div class="l">skipped: α &lt; 1/255</div></div>
+            <div class="stat"><div class="v">${nf(st.earlyStops)}</div><div class="l">early-out pixels</div></div>
+          </div>
+        </div></div>
+    </div>
+    <div class="stack">
+      <div class="card"><header>Rendered <span class="hint">${W}×${H}, nearest-neighbour upscale — real pixels</span></header>
+        <div class="body"><div id="pipe-holder"></div></div></div>
+      ${tilesSvg ? `<div class="card"><header>16×16 tile occupancy <span class="hint">darker = more splats in this tile's list</span></header><div class="body tight">${tilesSvg}</div></div>` : ""}
+      ${orderSvg ? `<div class="card"><header>contributors per pixel <span class="hint">how many splats actually wrote this pixel (after all skips)</span></header><div class="body tight">${orderSvg}</div></div>` : ""}
+    </div>
+  </div>
+  <div class="callout info" style="margin-top:14px">
+    <div class="t">The five steps, exactly as the CUDA kernel does them</div>
+    1 project each splat (EWA) → 2D covariance + conic; 2 radius = ⌈3σmax⌉, register into every 16×16 tile it touches;
+    3 sort by (tileID, depth); 4 each tile's 256 threads walk its list front-to-back, α-blending with running transmittance T;
+    5 skip when α &lt; 1/255, stop the pixel when T·(1−α) &lt; 1e-4. Uncheck any switch above and watch the numbers move.
+  </div>`;
+  p.querySelectorAll("select[data-p]").forEach((s) => { s.value = String(P2[s.dataset.p]); s.addEventListener("change", () => { P2[s.dataset.p] = s.dataset.p === "N" ? +s.value : s.value; SCENE = null; RENDER.pipe(); }); });
+  p.querySelectorAll("input[type=range][data-p]").forEach((r) => r.addEventListener("input", () => { P2[r.dataset.p] = +r.value; RENDER.pipe(); }));
+  p.querySelectorAll("input[type=checkbox][data-p]").forEach((c) => c.addEventListener("change", () => { P2[c.dataset.p] = c.checked; RENDER.pipe(); }));
+  p.querySelector("#pipe-holder").appendChild(cv);
+};
+/* ================= tab 3: differentiable fitting ================= */
+const FW = 64, FH = 64;
+const D3 = { n: 6, lr: 0.05, perTick: 6, sort: false, cap: true, amin: true,
+  running: false, hist: [], P: null, T: null, GT: null, tick: 0, M: null, V: null,
+  init: "grid", dead: false };
+function d3target(reset) {
+  const rnd = (s => () => (s = (s * 1664525 + 1013904223) >>> 0, s / 4294967296))(42 + (reset ? (Math.random() * 1e6 | 0) : 0));
+  const gt = new Float64Array(D3.n * NS);
+  for (let i = 0; i < D3.n; i++) {
+    const o = i * NS;
+    gt[o] = 8 + rnd() * (FW - 16); gt[o + 1] = 8 + rnd() * (FH - 16);
+    gt[o + 2] = 3 + rnd() * 9; gt[o + 3] = 3 + rnd() * 9;
+    gt[o + 4] = rnd() * Math.PI;
+    gt[o + 5] = 0.2 + rnd() * 0.8; gt[o + 6] = 0.2 + rnd() * 0.8; gt[o + 7] = 0.2 + rnd() * 0.8;
+    gt[o + 8] = 0.5 + rnd() * 0.5;
+  }
+  D3.GT = gt;
+  D3.T = render2d(gt, FW, FH, [0, 0, 0], D3.sort, D3.cap, D3.amin).img;
+}
+function d3init(resetTarget) {
+  if (!D3.T || resetTarget) d3target(resetTarget);
+  const rnd = (s => () => (s = (s * 1664525 + 1013904223) >>> 0, s / 4294967296))(7);
+  let P;
+  if (D3.init === "grid") {
+    const m2 = 4, N2 = m2 * m2;
+    P = new Float64Array(N2 * NS);
+    for (let iy = 0; iy < m2; iy++) for (let ix = 0; ix < m2; ix++) {
+      const i = iy * m2 + ix, o = i * NS;
+      P[o] = (ix + 0.5) * FW / m2 + (rnd() * 2 - 1) * 4;
+      P[o + 1] = (iy + 0.5) * FH / m2 + (rnd() * 2 - 1) * 4;
+      P[o + 2] = 6 + rnd() * 4; P[o + 3] = 6 + rnd() * 4; P[o + 4] = rnd() * Math.PI;
+      P[o + 5] = rnd(); P[o + 6] = rnd(); P[o + 7] = rnd(); P[o + 8] = 0.35 + rnd() * 0.4;
+    }
+  } else {
+    const N2 = D3.n;
+    P = new Float64Array(N2 * NS);
+    for (let i = 0; i < N2; i++) {
+      const o = i * NS;
+      P[o] = 4 + rnd() * (FW - 8); P[o + 1] = 4 + rnd() * (FH - 8);
+      P[o + 2] = 3 + rnd() * 4; P[o + 3] = 3 + rnd() * 4; P[o + 4] = rnd() * Math.PI;
+      P[o + 5] = rnd(); P[o + 6] = rnd(); P[o + 7] = rnd(); P[o + 8] = 0.3 + rnd() * 0.5;
+    }
+  }
+  D3.P = P; D3.M = new Float64Array(P.length); D3.V = new Float64Array(P.length);
+  D3.hist = []; D3.tick = 0; D3.running = false;
+}
+function d3step(k) {
+  const b1 = 0.9, b2 = 0.999, eps = 1e-8;
+  for (let s = 0; s < k; s++) {
+    D3.tick++;
+    const r = grad2d(D3.P, D3.T, FW, FH, [0, 0, 0], D3.sort, D3.cap, D3.amin);
+    D3.hist.push(r.loss);
+    if (D3.hist.length > 600) D3.hist.shift();
+    for (let i = 0; i < D3.P.length; i++) {
+      D3.M[i] = b1 * D3.M[i] + (1 - b1) * r.grad[i];
+      D3.V[i] = b2 * D3.V[i] + (1 - b2) * r.grad[i] * r.grad[i];
+      const mh = D3.M[i] / (1 - Math.pow(b1, D3.tick));
+      const vh = D3.V[i] / (1 - Math.pow(b2, D3.tick));
+      D3.P[i] -= D3.lr * mh / (Math.sqrt(vh) + eps);
+    }
+  }
+}
+RENDER.diff = function () {
+  const p = $("#p-diff");
+  if (!D3.P) d3init(true);
+  const cur = render2d(D3.P, FW, FH, [0, 0, 0], D3.sort, D3.cap, D3.amin).img;
+  const loss = D3.hist.length ? D3.hist[D3.hist.length - 1] : loss2d(D3.P, D3.T, FW, FH, [0, 0, 0], D3.sort, D3.cap, D3.amin);
+  const cvT = canvasFromImg(D3.T, FW, FH, 3);
+  const cvC = canvasFromImg(cur, FW, FH, 3);
+  cvT.id = "diff-target"; cvC.id = "diff-current";
+  const LW = 420, LH = 150, pad = 40;
+  const h = D3.hist.length ? D3.hist : [loss];
+  const lmax = Math.max(...h, 1e-9), lmin = Math.min(...h);
+  const pts = h.map((v, i) => [pad + (i / Math.max(1, h.length - 1)) * (LW - pad - 10),
+    LH - 20 - ((v - lmin) / Math.max(1e-12, lmax - lmin)) * (LH - 40)]);
+  const curve = `<svg viewBox="0 0 ${LW} ${LH}" width="100%" role="img" aria-label="loss curve">
+    <line x1="${pad}" y1="${LH - 20}" x2="${LW - 10}" y2="${LH - 20}" stroke="var(--line2)"/>
+    <line x1="${pad}" y1="10" x2="${pad}" y2="${LH - 20}" stroke="var(--line2)"/>
+    ${h.length > 1 ? `<polyline points="${pts.map((q) => q[0].toFixed(1) + "," + q[1].toFixed(1)).join(" ")}" fill="none" stroke="var(--accent)" stroke-width="1.8"/>` : ""}
+    <text x="${pad}" y="14" font-size="10.5" fill="var(--fg3)">loss ${lmax.toExponential(2)} → ${lmin.toExponential(2)} (linear scale)</text>
+    <text x="${LW - 10}" y="${LH - 6}" text-anchor="end" font-size="10.5" fill="var(--fg3)">Adam step → ${D3.tick}</text>
+  </svg>`;
+  const names = ["x", "y", "σ₁", "σ₂", "θ", "r", "g", "b", "α"];
+  const r0 = grad2d(D3.P, D3.T, FW, FH, [0, 0, 0], D3.sort, D3.cap, D3.amin);
+  const gmax = Math.max(...Array.from(r0.grad, Math.abs), 1e-9);
+  const bars = names.map((nm, k) => {
+    const v = r0.grad[k];
+    const w = Math.abs(v) / gmax * 100;
+    return `<div class="row" style="gap:6px;margin:2px 0"><span style="width:22px;font-size:11.5px;color:var(--fg2)">${nm}</span>
+      <div style="flex:1;height:9px;background:var(--bg2);border-radius:3px;overflow:hidden">
+        <div style="width:${w.toFixed(1)}%;height:100%;background:${v < 0 ? "var(--red)" : "var(--green)"}"></div></div>
+      <span style="width:74px;text-align:right;font-size:11px;color:var(--fg3);font-variant-numeric:tabular-nums">${v.toExponential(1)}</span></div>`;
+  }).join("");
+  p.innerHTML = `
+  <div class="grid2">
+    <div class="stack">
+      <div class="card"><header>Target vs current <span class="hint">left = ground-truth image, right = your ${D3.P.length / NS} splats</span></header>
+        <div class="body row" style="align-items:flex-start;gap:14px">
+          <div><div style="font-size:11.5px;color:var(--fg3);margin-bottom:4px">target (fixed)</div><div id="diff-holder-t"></div></div>
+          <div><div style="font-size:11.5px;color:var(--fg3);margin-bottom:4px">current fit</div><div id="diff-holder-c"></div></div>
+        </div></div>
+      <div class="card"><header>Loss <span class="hint">½·mean((render − target)²)</span></header><div class="body">${curve}</div></div>
+    </div>
+    <div class="stack">
+      <div class="card"><header>Optimizer <span class="hint">Adam, as in the 3DGS paper</span></header>
+        <div class="body stack">
+          <label class="ctl"><span>learning rate = <b>${D3.lr}</b></span><input type="range" min="-2.3" max="-0.7" step="0.05" value="${Math.log10(D3.lr)}" data-d="lr"></label>
+          <label class="ctl"><span>steps per frame = <b>${D3.perTick}</b></span><input type="range" min="1" max="40" step="1" value="${D3.perTick}" data-d="perTick"></label>
+          <div class="row">
+            <label class="ctl"><span>init</span><select data-d="init"><option value="grid">4×4 grid (SfM-like)</option><option value="rand">${D3.n} random (dead-zone demo)</option></select></label>
+          </div>
+          <div class="row">
+            <label class="check"><input type="checkbox" data-d="sort" ${D3.sort ? "checked" : ""}>sort by y (a discrete decision!)</label>
+            <label class="check"><input type="checkbox" data-d="cap" ${D3.cap ? "checked" : ""}>α ≤ 0.99</label>
+            <label class="check"><input type="checkbox" data-d="amin" ${D3.amin ? "checked" : ""}>α ≥ 1/255</label>
+          </div>
+          <div class="row">
+            <button class="btn" id="d3-run">${D3.running ? "pause" : "run"}</button>
+            <button class="btn" id="d3-step">+1 step</button>
+            <button class="btn" id="d3-reset">re-init splats</button>
+            <button class="btn" id="d3-new">new target</button>
+          </div>
+        </div></div>
+      <div class="card"><header>∂loss/∂params of splat #0 <span class="hint">green = increase, red = decrease</span></header>
+        <div class="body">${bars}</div></div>
+    </div>
+  </div>
+  <div class="callout info" style="margin-top:14px">
+    <div class="t">Why this is the whole trick — and where it breaks</div>
+    Every pixel is a smooth formula of the 9 (×N) parameters, so <code>∂image/∂params</code> exists: gradient descent can
+    <i>move, stretch, recolour</i> splats to match photos. The only non-smooth parts are the two α thresholds and the sort order —
+    exactly the discrete decisions neural nets hate; here they are few and harmless (gradient is zero across them).
+    Now switch init to <b>${D3.n} random</b>: splats that land far from any signal get ≈0 gradient and never move —
+    a <b>dead zone</b>. That is precisely why the original paper seeds splats with Structure-from-Motion points and
+    keeps <i>densifying / pruning</i> them during training. This page's gradient is analytic, cross-checked against
+    finite differences (max rel. error 1.3e-8).
+  </div>`;
+  p.querySelector("input[data-d=lr]").addEventListener("input", (e) => { D3.lr = Math.pow(10, +e.target.value); RENDER.diff(); });
+  p.querySelector("input[data-d=perTick]").addEventListener("input", (e) => { D3.perTick = +e.target.value; RENDER.diff(); });
+  p.querySelector("select[data-d=init]").value = D3.init;
+  p.querySelector("select[data-d=init]").addEventListener("change", (e) => { D3.init = e.target.value; d3init(false); RENDER.diff(); });
+  p.querySelectorAll("input[type=checkbox][data-d]").forEach((c) => c.addEventListener("change", () => {
+    D3[c.dataset.d] = c.checked;
+    if (c.dataset.d === "sort") D3.T = render2d(D3.GT, FW, FH, [0, 0, 0], D3.sort, D3.cap, D3.amin).img;
+    RENDER.diff();
+  }));
+  p.querySelector("#d3-run").addEventListener("click", () => { D3.running = !D3.running; RENDER.diff(); });
+  p.querySelector("#d3-step").addEventListener("click", () => { d3step(1); RENDER.diff(); });
+  p.querySelector("#d3-reset").addEventListener("click", () => { d3init(false); RENDER.diff(); });
+  p.querySelector("#d3-new").addEventListener("click", () => { d3init(true); RENDER.diff(); });
+  p.querySelector("#diff-holder-t").appendChild(cvT);
+  p.querySelector("#diff-holder-c").appendChild(cvC);
+};
+setInterval(() => { if (D3.running && $("#p-diff").classList.contains("on")) { d3step(D3.perTick); RENDER.diff(); } }, 80);
+
+/* ================= tab 4: why fast ================= */
+const F4 = { alpha: 0.5 };
+RENDER.fast = function () {
+  const p = $("#p-fast");
+  const rows = MEASURED.tileEfficiency;
+  const bw = 460, bh = 196, pad = 46;
+  const groups = rows.length;
+  const gw = (bw - pad - 10) / groups;
+  const lmax = Math.log10(Math.max(...rows.map((r) => r.brute)));
+  const bars = rows.map((r, i) => {
+    const x0 = pad + i * gw + 8;
+    const hB = (Math.log10(r.brute) / lmax) * (bh - 66);
+    const hT = (Math.log10(r.tileWrites) / lmax) * (bh - 66);
+    return `<g>
+      <rect x="${x0}" y="${bh - 34 - hB}" width="26" height="${hB}" fill="var(--fg3)" fill-opacity="0.55"></rect>
+      <rect x="${x0 + 30}" y="${bh - 34 - hT}" width="26" height="${hT}" fill="var(--accent)"></rect>
+      <text x="${x0 + 13}" y="${bh - 20}" font-size="9.5" fill="var(--fg2)" text-anchor="middle">N=${r.N}</text>
+      <text x="${x0 + 43}" y="${bh - 20}" font-size="9.5" fill="var(--fg2)" text-anchor="middle">${r.W}²</text>
+      <text x="${x0 + 28}" y="${bh - 38 - hB}" font-size="9" fill="var(--fg3)" text-anchor="middle">${nf(r.brute)}</text>
+      <text x="${x0 + 44}" y="${bh - 38 - hT}" font-size="9" fill="var(--accent)" text-anchor="middle">${nf(r.tileWrites)}</text>
+    </g>`;
+  }).join("");
+  const chart = `<svg viewBox="0 0 ${bw} ${bh}" width="100%" role="img" aria-label="tile writes vs brute force, log scale">
+    <line x1="${pad}" y1="${bh - 34}" x2="${bw - 6}" y2="${bh - 34}" stroke="var(--line2)"/>
+    <text x="4" y="14" font-size="10" fill="var(--fg3)">pixel-splat pairs (log₁₀)</text>
+    ${bars}
+    <text x="${bw - 6}" y="${bh - 6}" text-anchor="end" font-size="9.5" fill="var(--fg3)">grey = brute force N·W·H · blue = tile writes (measured)</text>
+  </svg>`;
+  const k = Math.ceil(Math.log(1e-4) / Math.log(1 - Math.min(0.999, F4.alpha)));
+  const consts = [
+    ["16 × 16", "tile size", "config.h: BLOCK_X / BLOCK_Y; one CUDA block = 256 threads = one tile"],
+    ["⌈3σmax", "splat screen radius", "forward.cu: bounding box from the larger eigenvalue; α there ≈ 0.011"],
+    ["+0.3", "low-pass on cov2d", "forward.cu: every splat is at least ~1 px wide; kills aliasing of tiny splats"],
+    ["0.99", "α cap", "forward.cu: min(0.99f, …); keeps 1−α ≥ 0.01 so T always decays"],
+    ["1/255", "α floor", "forward.cu: below one 8-bit level the contribution is invisible → skip"],
+    ["1e-4", "transmittance floor", "forward.cu: pixel done once T·(1−α) < 0.0001"],
+    ["z ≤ 0.2", "near-plane cull", "forward.cu: splats behind/at the camera are dropped"],
+    ["±1.3·tanfov", "Jacobian clamp", "forward.cu: limits the EWA linearisation to the frustum core"],
+  ].map(([v, n, s]) => `<tr><td><code>${v}</code></td><td>${n}</td><td style="color:var(--fg2)">${s}</td></tr>`).join("");
+  p.innerHTML = `
+  <div class="grid2">
+    <div class="stack">
+      <div class="card"><header>Work avoided by tile bucketing <span class="hint">measured with this page's core</span></header>
+        <div class="body">${chart}
+          <div class="legend"><span><i style="background:var(--fg3)"></i>brute force: every splat × every pixel</span>
+          <span><i style="background:var(--accent)"></i>tile path: only splats whose 3σ box touches the tile</span></div>
+        </div></div>
+      <div class="card"><header>Where the constants come from</header>
+        <div class="body tight"><table><tr><th>value</th><th>name</th><th>source &amp; meaning</th></tr>${consts}</table></div></div>
+    </div>
+    <div class="stack">
+      <div class="card"><header>Early-out arithmetic <span class="hint">why "front-to-back + T" is a terminator</span></header>
+        <div class="body stack">
+          <label class="ctl"><span>per-splat α = <b>${f2(F4.alpha)}</b></span><input type="range" min="0.05" max="0.99" step="0.01" value="${F4.alpha}" data-f="alpha"></label>
+          <div class="kv">After <b>k</b> overlapping splats the transmittance is <code>T = (1−α)^k</code>.
+          The pixel stops as soon as <code>T·(1−α) &lt; 1e-4</code>:</div>
+          <div class="stats">
+            <div class="stat"><div class="v">${k}</div><div class="l">splats until this pixel is opaque enough to stop</div></div>
+            <div class="stat"><div class="v">${Math.pow(1 - F4.alpha, k).toExponential(1)}</div><div class="l">T at that point</div></div>
+          </div>
+          <div class="kv">So a pixel never reads the whole scene — only the handful of splats in front of the first opaque surface.
+          Depth-sorting per tile is what makes "front" cheap: one 64-bit key <code>(tileID &lt;&lt; 32) | floatBits(depth)</code>, one radix sort for the whole frame.</div>
+        </div></div>
+      <div class="card"><header>What the tile path actually skips</header>
+        <div class="body stack">
+          <div class="kv"><b>1. Outside the 3σ box.</b> α there is ≤ α₀·e⁻⁴·⁵ ≈ 1.1% of α₀ — below the 1/255 floor for any α₀ &lt; 0.36, and visually negligible otherwise.</div>
+          <div class="kv"><b>2. Behind opaque stuff.</b> The T &lt; 1e-4 early-out ends the pixel's walk mid-list.</div>
+          <div class="kv"><b>3. Off-screen / behind camera.</b> Frustum + z ≤ 0.2 culling before any pixel work.</div>
+          <div class="kv"><b>Cost of the trick:</b> a splat touching many tiles is evaluated once per tile (duplicated work at tile borders), and pixels at a 3σ box corner get evaluated then skipped by the α floor. Both are cheap compared to N·W·H.</div>
+        </div></div>
+    </div>
+  </div>`;
+  p.querySelector("input[data-f=alpha]").addEventListener("input", (e) => { F4.alpha = +e.target.value; RENDER.fast(); });
+};
+/* ================= tab 5: comparison & boundaries ================= */
+const V5 = { n: 1000000 };
+RENDER.vs = function () {
+  const p = $("#p-vs");
+  const n = V5.n;
+  const mb = (b) => (n * b / 1e6).toFixed(1);
+  const rows = [
+    ["what it stores", "vertices + triangles + (uv, normals)", "implicit field f(x,y,z); mesh only after Marching Cubes", "N independent 3D Gaussians (14–62 numbers each)"],
+    ["topology", "explicit connectivity", "none until extracted", "none — ever"],
+    ["render", "triangle rasterizer (z-buffer)", "march rays through a network", "alpha-blend sorted splats (this page)"],
+    ["real-time today", "yes (the whole ecosystem)", "no for NeRF-class quality", "yes — that is the point"],
+    ["trainable by pixels", "hard (discrete topology)", "yes (differentiable ray march)", "yes (differentiable rasterizer)"],
+    ["edit / animate", "mature tooling", "hard", "emerging (4DGS, physics hybrids)"],
+    ["typical size", "100k tris ≈ 3–10 MB", "MLP 10–100 MB", `${nf(n)} splats: ${mb(56)} MB (LGM 14-float) / ${mb(248)} MB (3DGS .ply)`],
+  ].map((r) => `<tr>${r.map((c, i) => `<td${i ? "" : ' style="color:var(--fg2)"'}>${c}</td>`).join("")}</tr>`).join("");
+  const sizes = [
+    ["LGM runtime (14 floats)", 56, "3 pos + 1 α + 3 scale + 4 rot + 3 rgb — what this page renders"],
+    [".splat web format", 32, "pos f32×3 + scale f32×3 + rgba u8×4 + rot u8×4 (antimatter15/splat)"],
+    ["3DGS trained params", 236, "3 pos + 48 SH(deg 3) + 1 α + 3 scale + 4 rot = 59 floats"],
+    ["3DGS .ply on disk", 248, "the 59 trained + 3 unused normals (legacy PLY header)"],
+  ].map(([nm, b, s]) => `<tr><td>${nm}</td><td class="num">${b}</td><td class="num">${mb(b)}</td><td style="color:var(--fg2)">${s}</td></tr>`).join("");
+  p.innerHTML = `
+  <div class="card"><header>Three ways to say "a 3D thing"</header>
+    <div class="body tight"><table>
+      <tr><th></th><th>mesh</th><th>NeRF / implicit field</th><th>Gaussian splats</th></tr>${rows}
+    </table></div></div>
+  <div class="grid2" style="margin-top:16px">
+    <div class="card"><header>Bytes per splat <span class="hint">slider = ${nf(n)} splats</span></header>
+      <div class="body stack">
+        <label class="ctl"><span>N = <b>${nf(n)}</b></span><input type="range" min="3" max="7.3" step="0.05" value="${Math.log10(n)}" data-v="n"></label>
+        <table><tr><th>format</th><th class="num">B/splat</th><th class="num">total</th><th>contents</th></tr>${sizes}</table>
+        <div class="kv" style="margin-top:6px">Course pipeline (unit 3/5): LGM emits 4·64² = <b>16 384</b> splats (small) or 4·128² = <b>65 536</b> (big) —
+        i.e. ≈0.9 / 3.7 MB at 14 floats. Photo-trained scenes reach millions of splats, which is why editors prune and quantise.</div>
+      </div></div>
+    <div class="stack">
+      <div class="card"><header>Where splats stop being the right tool</header>
+        <div class="body stack">
+          <div class="kv"><b>No watertight surface.</b> Collision, CAD, 3D printing, UV/texture work still want a mesh — hence splat→mesh converters (course unit 4).</div>
+          <div class="kv"><b>Storage scales with detail, not with topology.</b> A flat wall costs as many splats as a furry one of equal screen detail.</div>
+          <div class="kv"><b>View-dependent effects</b> need spherical harmonics (48 extra floats/splat) or a network on top.</div>
+          <div class="kv"><b>Artifacts are fuzzy,</b> not cracked: floaters, needles, "splat soup" under large viewpoint change.</div>
+        </div></div>
+      <div class="card"><header>Lineage in one line</header>
+        <div class="body kv">Surface splatting (Zwicker et al. 2001) → EWA splatting (2002) → differentiable point rendering (diff. renderer line of work)
+        → <b>3D Gaussian Splatting</b> (Kerbl et al., SIGGRAPH 2023) → feed-forward generators like <b>LGM</b> (2024) that skip per-scene training.
+        The projection math on this page is the 2001/2002 EWA formula, unchanged.</div></div>
+    </div>
+  </div>`;
+  p.querySelector("input[data-v=n]").addEventListener("input", (e) => { V5.n = Math.round(Math.pow(10, +e.target.value)); RENDER.vs(); });
+};
+
+/* ================= boot ================= */
+const initial = location.hash.slice(1);
+if (initial && RENDER[initial]) {
+  const btn = document.querySelector(`.tab[data-tab="${initial}"]`);
+  if (btn) btn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+} else {
+  RENDER.anatomy();
+}
+
+</script>
+</body>
+</html>

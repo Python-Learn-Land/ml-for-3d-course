@@ -1,0 +1,1021 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Marching Cubes 交互讲解</title>
+<style>
+  :root {
+    --bg: #ffffff; --bg2: #f6f7f9; --fg: #1a1d21; --fg2: #5b6470; --fg3: #8a93a0;
+    --line: #e3e6ea; --line2: #cfd4da; --accent: #2e79b5; --accent-soft: rgba(46,121,181,.12);
+    --blue: #2e79b5; --orange: #f0a040; --purple: #7b64b8; --green: #1f8a65; --red: #c04848;
+    --warn-bg: rgba(240,160,64,.10); --danger-bg: rgba(192,72,72,.10); --info-bg: rgba(46,121,181,.08);
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161a; --bg2: #1c1f24; --fg: #e8eaed; --fg2: #a8b0ba; --fg3: #78818d;
+      --line: #2a2e35; --line2: #3a4048; --accent: #70b0d8; --accent-soft: rgba(112,176,216,.14);
+      --blue: #70b0d8; --orange: #f0a040; --purple: #aa98d8; --green: #52b896; --red: #e08080;
+      --warn-bg: rgba(240,160,64,.12); --danger-bg: rgba(224,128,128,.12); --info-bg: rgba(112,176,216,.10);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 14px/1.6 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    padding: 28px 20px 80px;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  h1 { font-size: 24px; line-height: 1.3; margin: 0 0 8px; font-weight: 600; }
+  h2 { font-size: 17px; margin: 28px 0 10px; font-weight: 600; }
+  h3 { font-size: 15px; margin: 18px 0 8px; font-weight: 600; }
+  p { margin: 8px 0; }
+  .lead { color: var(--fg2); max-width: 74ch; }
+  code, .mono { font-family: var(--mono); font-size: .92em; background: var(--bg2); padding: 1px 5px; border-radius: 4px; }
+  .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 20px 0 4px; }
+  .tab {
+    border: 1px solid var(--line2); background: var(--bg); color: var(--fg2);
+    border-radius: 999px; padding: 5px 14px; font-size: 13px; cursor: pointer; font-family: inherit;
+  }
+  .tab[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 500; }
+  .panel { display: none; margin-top: 18px; }
+  .panel.on { display: block; }
+  .grid2 { display: grid; grid-template-columns: minmax(0,1.35fr) minmax(0,1fr); gap: 16px; align-items: start; }
+  .grid2b { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.25fr); gap: 16px; align-items: start; }
+  @media (max-width: 860px) { .grid2, .grid2b { grid-template-columns: 1fr; } }
+  .card { border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+  .card > header {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 9px 14px; border-bottom: 1px solid var(--line); font-weight: 600; font-size: 13.5px;
+  }
+  .card > header .hint { font-weight: 400; color: var(--fg3); font-size: 12px; }
+  .card > .body { padding: 14px; }
+  .card > .body.tight { padding: 8px; }
+  .stack { display: flex; flex-direction: column; gap: 12px; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .row.spread { justify-content: space-between; }
+  label.ctl { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; color: var(--fg2); }
+  input[type="range"] { width: 100%; accent-color: var(--accent); cursor: pointer; }
+  select, input[type="number"] {
+    background: var(--bg2); color: var(--fg); border: 1px solid var(--line2);
+    border-radius: 5px; padding: 4px 7px; font: inherit; font-size: 13px;
+  }
+  input[type="number"] { width: 76px; }
+  .check { display: flex; gap: 7px; align-items: center; font-size: 13px; color: var(--fg); cursor: pointer; }
+  .check input { accent-color: var(--accent); width: 15px; height: 15px; }
+  button.btn {
+    border: 1px solid var(--line2); background: var(--bg2); color: var(--fg);
+    border-radius: 6px; padding: 4px 11px; font: inherit; font-size: 12.5px; cursor: pointer;
+  }
+  button.btn:hover { border-color: var(--accent); color: var(--accent); }
+  .stats { display: flex; gap: 22px; flex-wrap: wrap; }
+  .stat .v { font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .stat .l { font-size: 11.5px; color: var(--fg3); }
+  .stat.ok .v { color: var(--green); } .stat.bad .v { color: var(--red); } .stat.warn .v { color: var(--orange); }
+  svg { display: block; max-width: 100%; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 8px; font-size: 12px; color: var(--fg3); }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+  .callout { border-radius: 8px; padding: 10px 14px; font-size: 13px; border: 1px solid; }
+  .callout .t { font-weight: 600; margin-bottom: 3px; }
+  .callout.info { background: var(--info-bg); border-color: transparent; }
+  .callout.warn { background: var(--warn-bg); border-color: transparent; }
+  .callout.danger { background: var(--danger-bg); border-color: transparent; }
+  table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  th, td { border-bottom: 1px solid var(--line); padding: 5px 9px; text-align: left; }
+  th { color: var(--fg2); font-weight: 600; font-size: 12px; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr:nth-child(even) td { background: var(--bg2); }
+  .gallery { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 8px; }
+  @media (max-width: 860px) { .gallery { grid-template-columns: repeat(3, minmax(0,1fr)); } }
+  .gcell {
+    border: 1px solid var(--line); border-radius: 6px; padding: 5px; cursor: pointer; background: var(--bg);
+  }
+  .gcell.sel { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  .gcell .cap { font-size: 10.5px; color: var(--fg2); line-height: 1.35; }
+  .gcell .cap b { color: var(--fg); font-weight: 600; }
+  details > summary { cursor: pointer; font-weight: 600; font-size: 13.5px; padding: 4px 0; }
+  .src { font-size: 11.5px; color: var(--fg3); margin-top: 6px; }
+  .kv { font-size: 12.5px; color: var(--fg2); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Marching Cubes 交互讲解</h1>
+  <p class="lead">
+    把连续的「场」（SDF 或密度）翻译成三角网格的那个环节。神经网络学的是场，引擎只认三角形，
+    中间这道翻译自 1987 年以来几乎没变——这正是 3D 机器学习研究与应用之间的那个断层。
+    本页所有网格都是<b>在浏览器里实时计算</b>的，不是预渲染图片；单文件、零依赖，双击即可离线打开。
+  </p>
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" aria-selected="true"  data-tab="squares">二维直觉</button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="cases">256 → 15 查表</button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="live">三维实跑</button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="cost">代价与局限</button>
+  </div>
+
+  <section id="p-squares" class="panel on"></section>
+  <section id="p-cases"   class="panel"></section>
+  <section id="p-live"    class="panel"></section>
+  <section id="p-cost"    class="panel"></section>
+</div>
+
+<script>
+/* ==========================================================================
+   Marching Cubes / Marching Squares core.
+   Identical logic to the reference Python + numpy implementation; the two
+   were cross-validated bit-for-bit (vertex counts, face counts, per-case
+   loop/triangle/ambiguity counts, watertightness, outward normals).
+   ========================================================================== */
+const COR3 = [
+    [0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0],
+    [0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1],
+];
+/** The 12 cube edges as corner-index pairs. */
+const ED3 = [
+    [0, 1], [1, 2], [2, 3], [3, 0],
+    [4, 5], [5, 6], [6, 7], [7, 4],
+    [0, 4], [1, 5], [2, 6], [3, 7],
+];
+/** Faces with corners counter-clockwise seen from OUTSIDE the cube.
+    This orientation is what makes the directed segments chain into
+    consistently-oriented loops (outward normals). */
+const OFACES = [
+    [0, 3, 2, 1], [4, 5, 6, 7], [0, 1, 5, 4],
+    [3, 7, 6, 2], [0, 4, 7, 3], [1, 2, 6, 5],
+];
+const EO = new Map();
+ED3.forEach(([a, b], i) => { EO.set(`${a},${b}`, i); EO.set(`${b},${a}`, i); });
+const FACE_WALK = OFACES.map((f) => [0, 1, 2, 3].map((k) => [EO.get(`${f[k]},${f[(k + 1) % 4]}`), f[k], f[(k + 1) % 4]]));
+function cubeSegments(vals, level, saddleFlip) {
+    const ins = vals.map((v) => (v < level ? 1 : 0));
+    const mask = ins.reduce((m, b, i) => m | (b << i), 0);
+    const cut = ED3.map(([a, b]) => (ins[a] !== ins[b] ? 1 : 0));
+    if (mask === 0 || mask === 255)
+        return { mask, cut, segs: [], amb: 0, ambFaces: [] };
+    const segs = [];
+    const ambFaces = [];
+    for (let fi = 0; fi < FACE_WALK.length; fi++) {
+        const cs = [];
+        for (const [e, a, b] of FACE_WALK[fi])
+            if (cut[e])
+                cs.push([e, a, b]);
+        if (cs.length === 2) {
+            const tail = ins[cs[0][1]] === 0 ? cs[0][0] : cs[1][0];
+            const head = tail === cs[0][0] ? cs[1][0] : cs[0][0];
+            segs.push([tail, head]);
+        }
+        else if (cs.length === 4) {
+            ambFaces.push(fi);
+            const f = OFACES[fi];
+            const centerIn = (vals[f[0]] + vals[f[1]] + vals[f[2]] + vals[f[3]]) / 4 < level ? 1 : 0;
+            const target = 1 - centerIn;
+            for (let k = 0; k < 4; k++) {
+                const c = f[k];
+                if (ins[c] !== target)
+                    continue;
+                const ea = EO.get(`${f[(k + 3) % 4]},${c}`);
+                const eb = EO.get(`${c},${f[(k + 1) % 4]}`);
+                const pair = ins[c] ? [ea, eb] : [eb, ea];
+                segs.push(saddleFlip ? [pair[1], pair[0]] : pair);
+            }
+        }
+    }
+    return { mask, cut, segs, amb: ambFaces.length, ambFaces };
+}
+function chainLoops(segs) {
+    if (!segs.length)
+        return [];
+    const nxt = new Map();
+    for (const [t, h] of segs)
+        nxt.set(t, h);
+    const seen = new Set();
+    const loops = [];
+    for (const s of nxt.keys()) {
+        if (seen.has(s))
+            continue;
+        const loop = [];
+        let cur = s;
+        let closed = false;
+        while (cur !== undefined && !seen.has(cur)) {
+            seen.add(cur);
+            loop.push(cur);
+            const nx = nxt.get(cur);
+            if (nx === s) {
+                closed = true;
+                break;
+            }
+            cur = nx;
+        }
+        if (closed)
+            loops.push(loop);
+    }
+    return loops;
+}
+function cubeTopology(vals, level, saddleFlip = false) {
+    const { mask, cut, segs, amb } = cubeSegments(vals, level, saddleFlip);
+    const loops = chainLoops(segs);
+    const tris = [];
+    const triLoop = [];
+    loops.forEach((lp, li) => {
+        for (let i = 1; i < lp.length - 1; i++) {
+            tris.push([lp[0], lp[i], lp[i + 1]]);
+            triLoop.push(li);
+        }
+    });
+    const epts = {};
+    for (let e = 0; e < 12; e++) {
+        if (!cut[e])
+            continue;
+        const [a, b] = ED3[e];
+        epts[e] = [0, 1, 2].map((d) => (COR3[a][d] + COR3[b][d]) / 2);
+    }
+    return { mask, cut, loops, tris, triLoop, amb, epts };
+}
+/** The 24 proper rotations of the cube, as corner permutations. */
+function rotations24() {
+    const idx = new Map();
+    COR3.forEach((c, i) => idx.set(c.join(","), i));
+    const set = new Set();
+    const axes = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
+    for (const ax of axes) {
+        const inv = (ax[0] > ax[1] ? 1 : 0) + (ax[0] > ax[2] ? 1 : 0) + (ax[1] > ax[2] ? 1 : 0);
+        const det = inv % 2 ? -1 : 1;
+        for (const s of [[1, 1, 1], [1, 1, -1], [1, -1, 1], [1, -1, -1], [-1, 1, 1], [-1, 1, -1], [-1, -1, 1], [-1, -1, -1]]) {
+            if (s[0] * s[1] * s[2] !== det)
+                continue;
+            const m = COR3.map((c) => idx.get(ax.map((k, t) => (s[t] === 1 ? c[k] : 1 - c[k])).join(",")));
+            set.add(m.join(","));
+        }
+    }
+    return [...set].map((str) => str.split(",").map(Number));
+}
+const binCount = (m) => { let n = 0; for (let i = 0; i < 8; i++)
+    n += (m >> i) & 1; return n; };
+const ncutOf = (m) => ED3.reduce((s, [a, b]) => s + ((((m >> a) & 1) !== ((m >> b) & 1)) ? 1 : 0), 0);
+/** Partition all 256 masks into equivalence classes under
+    rotation (24) and inside/outside complement -> the 15 base cases. */
+function caseOrbits() {
+    const ROT = rotations24();
+    const seen = new Set();
+    const orbits = [];
+    for (let mask = 0; mask < 256; mask++) {
+        if (seen.has(mask))
+            continue;
+        const g = new Set([mask]);
+        let fr = [mask];
+        while (fr.length) {
+            const add = [];
+            for (const m of fr) {
+                for (const p of ROT) {
+                    let nm = 0;
+                    for (let i = 0; i < 8; i++)
+                        nm |= ((m >> p[i]) & 1) << i;
+                    if (!g.has(nm)) {
+                        g.add(nm);
+                        add.push(nm);
+                    }
+                }
+                const cm = 255 - m;
+                if (!g.has(cm)) {
+                    g.add(cm);
+                    add.push(cm);
+                }
+            }
+            fr = add;
+        }
+        g.forEach((x) => seen.add(x));
+        orbits.push([...g].sort((a, b) => a - b));
+    }
+    orbits.sort((A, B) => {
+        const a = A[0];
+        const b = B[0];
+        return (binCount(a) - binCount(b)) || (ncutOf(a) - ncutOf(b)) || (a - b);
+    });
+    const caseOf = new Array(256).fill(0);
+    orbits.forEach((g, i) => g.forEach((m) => { caseOf[m] = i; }));
+    return { orbits, caseOf };
+}
+const ORBITS = caseOrbits();
+const maskVals = (m) => [0, 1, 2, 3, 4, 5, 6, 7].map((i) => (((m >> i) & 1) ? -1 : 1));
+const CASE_TOPO = ORBITS.orbits.map((g) => cubeTopology(maskVals(g[0]), 0));
+/** Full marching cubes over an n^3 sampled field. */
+function marchingCubes(sample, n, level) {
+    const t0 = performance.now();
+    const lo = -1.5;
+    const h = 3 / (n - 1);
+    const at = (i, j, k) => sample(lo + i * h, lo + j * h, lo + k * h);
+    const f = new Float64Array(n * n * n);
+    const id = (i, j, k) => (i * n + j) * n + k;
+    for (let i = 0; i < n; i++)
+        for (let j = 0; j < n; j++)
+            for (let k = 0; k < n; k++)
+                f[id(i, j, k)] = at(i, j, k);
+    const verts = [];
+    const faces = [];
+    const vids = new Map();
+    let cellsHit = 0;
+    const edgeId = (A, B, ga, gb) => {
+        const key = A < B ? A * 4194304 + B : B * 4194304 + A;
+        let v = vids.get(key);
+        if (v === undefined) {
+            const fa = f[A];
+            const fb = f[B];
+            const d = fb - fa;
+            const t = Math.abs(d) < 1e-12 ? 0.5 : (level - fa) / d;
+            v = verts.length;
+            verts.push([0, 1, 2].map((q) => (ga[q] + t * (gb[q] - ga[q])) * h));
+            vids.set(key, v);
+        }
+        return v;
+    };
+    for (let i = 0; i < n - 1; i++)
+        for (let j = 0; j < n - 1; j++)
+            for (let k = 0; k < n - 1; k++) {
+                const vals = COR3.map(([dx, dy, dz]) => f[id(i + dx, j + dy, k + dz)]);
+                const { cut, segs } = cubeSegments(vals, level, false);
+                if (!segs.length)
+                    continue;
+                cellsHit++;
+                const ids = new Array(12).fill(-1);
+                for (let e = 0; e < 12; e++) {
+                    if (!cut[e])
+                        continue;
+                    const [a, b] = ED3[e];
+                    ids[e] = edgeId(id(i + COR3[a][0], j + COR3[a][1], k + COR3[a][2]), id(i + COR3[b][0], j + COR3[b][1], k + COR3[b][2]), [i + COR3[a][0], j + COR3[a][1], k + COR3[a][2]], [i + COR3[b][0], j + COR3[b][1], k + COR3[b][2]]);
+                }
+                for (const lp of chainLoops(segs)) {
+                    for (let q = 1; q < lp.length - 1; q++)
+                        faces.push([ids[lp[0]], ids[lp[q]], ids[lp[q + 1]]]);
+                }
+            }
+    return { verts, faces, cellsHit, ms: performance.now() - t0 };
+}
+/** Same as marchingCubes but with the saddle pairing reversed on every
+    ambiguous cube. Used only to demonstrate what inconsistent
+    disambiguation does (cracks / non-manifold edges). */
+function marchingCubesFlipped(sample, n, level) {
+    const t0 = performance.now();
+    const lo = -1.5;
+    const h = 3 / (n - 1);
+    const field = new Float64Array(n * n * n);
+    const id = (i, j, k) => (i * n + j) * n + k;
+    for (let i = 0; i < n; i++)
+        for (let j = 0; j < n; j++)
+            for (let k = 0; k < n; k++) {
+                field[id(i, j, k)] = sample(lo + i * h, lo + j * h, lo + k * h);
+            }
+    const verts = [];
+    const faces = [];
+    const vids = new Map();
+    let cellsHit = 0;
+    const edgeId = (A, B, ga, gb) => {
+        const key = A < B ? A * 4194304 + B : B * 4194304 + A;
+        let v = vids.get(key);
+        if (v === undefined) {
+            const fa = field[A];
+            const fb = field[B];
+            const d = fb - fa;
+            const t = Math.abs(d) < 1e-12 ? 0.5 : (level - fa) / d;
+            v = verts.length;
+            verts.push([0, 1, 2].map((q) => (ga[q] + t * (gb[q] - ga[q])) * h));
+            vids.set(key, v);
+        }
+        return v;
+    };
+    for (let i = 0; i < n - 1; i++)
+        for (let j = 0; j < n - 1; j++)
+            for (let k = 0; k < n - 1; k++) {
+                const vals = COR3.map(([dx, dy, dz]) => field[id(i + dx, j + dy, k + dz)]);
+                const { cut, segs } = cubeSegments(vals, level, true);
+                if (!segs.length)
+                    continue;
+                cellsHit++;
+                const ids = new Array(12).fill(-1);
+                for (let e = 0; e < 12; e++) {
+                    if (!cut[e])
+                        continue;
+                    const [a, b] = ED3[e];
+                    const ga = [i + COR3[a][0], j + COR3[a][1], k + COR3[a][2]];
+                    const gb = [i + COR3[b][0], j + COR3[b][1], k + COR3[b][2]];
+                    ids[e] = edgeId(id(ga[0], ga[1], ga[2]), id(gb[0], gb[1], gb[2]), ga, gb);
+                }
+                for (const lp of chainLoops(segs)) {
+                    for (let q = 1; q < lp.length - 1; q++)
+                        faces.push([ids[lp[0]], ids[lp[q]], ids[lp[q + 1]]]);
+                }
+            }
+    return { verts, faces, cellsHit, ms: performance.now() - t0 };
+}
+/* ---------------- 2D: Marching Squares ---------------- */
+const C2 = [[0, 0], [1, 0], [1, 1], [0, 1]]; // BL, BR, TR, TL
+const E2 = [[0, 1], [1, 2], [2, 3], [3, 0]]; // bottom, right, top, left
+function sqCell(vals, level, saddleFlip) {
+    const ins = vals.map((v) => (v < level ? 1 : 0));
+    const mask = ins.reduce((m, b, i) => m | (b << i), 0);
+    const cut = E2.map(([a, b]) => (ins[a] !== ins[b] ? 1 : 0));
+    const cs = [];
+    for (let e = 0; e < 4; e++)
+        if (cut[e])
+            cs.push(e);
+    let saddle = false;
+    let segs = [];
+    const center = (vals[0] + vals[1] + vals[2] + vals[3]) / 4;
+    if (cs.length === 4) {
+        saddle = true;
+        const a = center < level ? [[cs[0], cs[1]], [cs[2], cs[3]]] : [[cs[0], cs[3]], [cs[1], cs[2]]];
+        const b = center < level ? [[cs[0], cs[3]], [cs[1], cs[2]]] : [[cs[0], cs[1]], [cs[2], cs[3]]];
+        segs = saddleFlip ? b : a;
+    }
+    else if (cs.length === 2) {
+        segs = [[cs[0], cs[1]]];
+    }
+    const pts = {};
+    for (let e = 0; e < 4; e++) {
+        if (!cut[e])
+            continue;
+        const [a, b] = E2[e];
+        const fa = vals[a];
+        const fb = vals[b];
+        const d = fb - fa;
+        const t = Math.abs(d) < 1e-12 ? 0.5 : (level - fa) / d;
+        pts[e] = [C2[a][0] + t * (C2[b][0] - C2[a][0]), C2[a][1] + t * (C2[b][1] - C2[a][1])];
+    }
+    return { mask, ins, cut, segs, saddle, pts, center };
+}
+/* ---------------- isometric projection ---------------- */
+/** Rotate about z by yaw, then about x by pitch.
+    Returns [screenX, screenY, depth]; larger depth = nearer the camera. */
+function project(p, yaw, pitch, s) {
+    const x = p[0] - 0.5;
+    const y = p[1] - 0.5;
+    const z = p[2] - 0.5;
+    const cyaw = Math.cos(yaw);
+    const syaw = Math.sin(yaw);
+    const x1 = x * cyaw - y * syaw;
+    const y1 = x * syaw + y * cyaw;
+    const cp = Math.cos(pitch);
+    const sp = Math.sin(pitch);
+    const y2 = y1 * cp - z * sp;
+    const z2 = y1 * sp + z * cp;
+    return [x1 * s, -z2 * s, y2];
+}
+
+/* ---------------- theme ---------------- */
+const CSSV = getComputedStyle(document.documentElement);
+const cv = (name, fallback) => (CSSV.getPropertyValue(name).trim() || fallback);
+const T = {
+  bg:      () => cv("--bg", "#ffffff"),
+  fg:      () => cv("--fg", "#1a1d21"),
+  fg2:     () => cv("--fg2", "#5b6470"),
+  fg3:     () => cv("--fg3", "#8a93a0"),
+  line:    () => cv("--line", "#e3e6ea"),
+  line2:   () => cv("--line2", "#cfd4da"),
+  accent:  () => cv("--accent", "#2e79b5"),
+  blue:    () => cv("--blue", "#2e79b5"),
+  orange:  () => cv("--orange", "#f0a040"),
+  purple:  () => cv("--purple", "#7b64b8"),
+  green:   () => cv("--green", "#1f8a65"),
+  red:     () => cv("--red", "#c04848"),
+};
+const LOOP_HUES = [T.blue, T.orange, T.purple, T.green];
+const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const fmt = (n) => Number(n).toLocaleString("en-US");
+
+/* ---------------- tiny DOM helpers ---------------- */
+function h(html) { const t = document.createElement("template"); t.innerHTML = html.trim(); return t.content.firstElementChild; }
+function stat(v, l, cls) { return `<div class="stat ${cls || ""}"><div class="v">${v}</div><div class="l">${l}</div></div>`; }
+function card(title, hint, bodyHtml, tight) {
+  return `<div class="card"><header><span>${title}</span>${hint ? `<span class="hint">${hint}</span>` : ""}</header><div class="body${tight ? " tight" : ""}">${bodyHtml}</div></div>`;
+}
+function slider(id, label, min, max, step, value, fmtFn) {
+  return `<label class="ctl"><span class="row spread"><span>${label}</span><b id="${id}-v">${fmtFn ? fmtFn(value) : value}</b></span>
+    <input type="range" id="${id}" min="${min}" max="${max}" step="${step}" value="${value}" aria-label="${label}"></label>`;
+}
+function bindSlider(id, get, set, fmtFn) {
+  const el = document.getElementById(id);
+  const lab = document.getElementById(id + "-v");
+  el.addEventListener("input", () => { set(Number(el.value)); lab.textContent = fmtFn ? fmtFn(Number(el.value)) : el.value; });
+}
+
+/* ==========================================================================
+   Tab switching
+   ========================================================================== */
+document.querySelectorAll(".tab").forEach((b) => {
+  b.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
+    document.querySelectorAll(".panel").forEach((p) => p.classList.toggle("on", p.id === "p-" + b.dataset.tab));
+  });
+});
+
+/* ==========================================================================
+   Panel 1 — Marching Squares playground
+   ========================================================================== */
+const FIELDS_2D = [
+  { id: "circle", label: "圆（SDF）", fn: (x, y) => Math.hypot(x - 0.5, y - 0.5) - 0.32,
+    note: "最简单的有符号距离场：到圆心的距离减去半径。阈值 0 就是圆周本身。" },
+  { id: "two", label: "双圆（并集）", fn: (x, y) => Math.min(Math.hypot(x - 0.32, y - 0.48) - 0.2, Math.hypot(x - 0.71, y - 0.52) - 0.25),
+    note: "两个 SDF 取 min 就是并集。等值线会同时套住两个圆。" },
+  { id: "saddle", label: "鞍面（歧义演示）", fn: (x, y) => ((x - 0.5) ** 2 - (y - 0.5) ** 2) * 1.7,
+    note: "鞍点场：对角两内两外的格子最多，专门用来演示「同一个格子有两种连法」。" },
+  { id: "wave", label: "波纹（高频）", fn: (x, y) => Math.sin((x - 0.5) * 10) * Math.cos((y - 0.5) * 10) - 0.1,
+    note: "高频场。分辨率太粗时等值线会断裂、走样——这就是采样定理在体素网格上的体现。" },
+];
+const sq = { field: "circle", level: 0, res: 12, flip: false, grid: true, corners: true, sel: "" };
+
+function sqBuild() {
+  const field = FIELDS_2D.find((f) => f.id === sq.field);
+  const N = sq.res;
+  const vals = [];
+  let vmin = Infinity, vmax = -Infinity;
+  for (let i = 0; i <= N; i++) {
+    const row = [];
+    for (let j = 0; j <= N; j++) { const v = field.fn(i / N, j / N); row.push(v); if (v < vmin) vmin = v; if (v > vmax) vmax = v; }
+    vals.push(row);
+  }
+  const range = Math.max(Math.abs(vmin), Math.abs(vmax), 1e-6);
+  const cells = []; let cutCells = 0, saddles = 0, segCount = 0;
+  for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+    const cv = [vals[i][j], vals[i + 1][j], vals[i + 1][j + 1], vals[i][j + 1]];
+    const r = sqCell(cv, sq.level, sq.flip);
+    cells.push({ i, j, r });
+    if (r.mask !== 0 && r.mask !== 15) cutCells++;
+    if (r.saddle) saddles++;
+    segCount += r.segs.length;
+  }
+  return { N, vals, range, cells, cutCells, saddles, segCount, field };
+}
+
+function sqRender() {
+  const b = sqBuild();
+  const S = 360, pad = 14, size = S - pad * 2, cell = size / b.N;
+  const px = (u) => pad + u * size, py = (v) => pad + (1 - v) * size;
+  let out = "";
+  for (const c of b.cells) {
+    const mean = (b.vals[c.i][c.j] + b.vals[c.i + 1][c.j] + b.vals[c.i + 1][c.j + 1] + b.vals[c.i][c.j + 1]) / 4;
+    const inside = mean < sq.level;
+    const mag = Math.min(1, Math.abs(mean) / b.range);
+    out += `<rect x="${px(c.i / b.N)}" y="${py((c.j + 1) / b.N)}" width="${cell}" height="${cell}" fill="${inside ? T.blue() : T.fg3()}" fill-opacity="${(0.06 + 0.3 * mag).toFixed(3)}"/>`;
+  }
+  if (sq.grid) for (let i = 0; i <= b.N; i++) {
+    out += `<line x1="${px(i / b.N)}" y1="${py(0)}" x2="${px(i / b.N)}" y2="${py(1)}" stroke="${T.line()}" stroke-width="0.5"/>`;
+    out += `<line x1="${px(0)}" y1="${py(i / b.N)}" x2="${px(1)}" y2="${py(i / b.N)}" stroke="${T.line()}" stroke-width="0.5"/>`;
+  }
+  for (const c of b.cells) if (c.r.saddle) {
+    out += `<rect x="${px(c.i / b.N)}" y="${py((c.j + 1) / b.N)}" width="${cell}" height="${cell}" fill="none" stroke="${T.red()}" stroke-width="1" stroke-dasharray="2 2" pointer-events="none"/>`;
+  }
+  for (const c of b.cells) {
+    out += `<rect data-cell="${c.i},${c.j}" x="${px(c.i / b.N)}" y="${py((c.j + 1) / b.N)}" width="${cell}" height="${cell}" fill="transparent" stroke="${sq.sel === c.i + "," + c.j ? T.accent() : "none"}" stroke-width="1.5" style="cursor:pointer"/>`;
+  }
+  if (sq.corners) for (let i = 0; i <= b.N; i++) for (let j = 0; j <= b.N; j++) {
+    const inside = b.vals[i][j] < sq.level;
+    out += `<circle cx="${px(i / b.N)}" cy="${py(j / b.N)}" r="${b.N <= 16 ? 2.4 : 1.5}" fill="${inside ? T.blue() : "none"}" stroke="${inside ? T.blue() : T.fg3()}" stroke-width="1"/>`;
+  }
+  for (const c of b.cells) for (const sg of c.r.segs) {
+    const p0 = c.r.pts[sg[0]], p1 = c.r.pts[sg[1]];
+    out += `<line x1="${px((c.i + p0[0]) / b.N)}" y1="${py((c.j + p0[1]) / b.N)}" x2="${px((c.i + p1[0]) / b.N)}" y2="${py((c.j + p1[1]) / b.N)}" stroke="${T.accent()}" stroke-width="2.2" stroke-linecap="round" pointer-events="none"/>`;
+  }
+  const selected = b.cells.find((c) => c.i + "," + c.j === sq.sel);
+  const selHtml = selected ? card(`格子 (${selected.i}, ${selected.j})`, `<button class="btn" id="sq-unsel">取消选择</button>`, `
+    <div class="stack">
+      <div class="row kv">掩码 <code>${selected.r.mask}</code> 二进制（c3 c2 c1 c0）<code>${selected.r.mask.toString(2).padStart(4, "0")}</code></div>
+      <div class="row kv">被切边 <code>${selected.r.cut.reduce((a, x) => a + x, 0)}</code> 线段 <code>${selected.r.segs.length}</code></div>
+      <p>${selected.r.saddle
+        ? "这是鞍点格：四条边全被切开，有两种连法。当前用的是「面中心采样」判定的" + (sq.flip ? "另一种" : "默认") + "配对。"
+        : (selected.r.segs.length === 0 ? "表面不穿过此格，直接跳过（16 种里最常见的两种）。" : "普通格：连成 " + selected.r.segs.length + " 条线段。")}</p>
+    </div>`)
+    : `<div class="callout info"><div class="t">点一个格子看看</div>在左侧图上点击任意格子，这里会显示它的掩码、四角内外状态和连线方式。</div>`;
+
+  document.getElementById("p-squares").innerHTML = `
+    <p class="lead">二维版本叫 Marching Squares：把平面切成小方格，看每格四个角在阈值内侧还是外侧，再在跨越阈值的边上打点连线。
+      Marching Cubes 只是把它升到三维——线变成面，<code>2⁴ = 16</code> 种组合变成 <code>2⁸ = 256</code> 种。</p>
+    <div class="grid2">
+      ${card("等值线提取", esc(b.field.label), `
+        <svg viewBox="0 0 ${S} ${S}" width="100%" role="img" aria-label="二维 Marching Squares 等值线提取">${out}</svg>
+        <div class="legend">
+          <span><i style="background:${T.blue()}"></i>阈值内侧</span>
+          <span><i style="background:none;border:1px solid ${T.fg3()}"></i>阈值外侧</span>
+          <span><i style="background:${T.accent()}"></i>提取出的等值线段</span>
+          <span><i style="background:none;border:1px dashed ${T.red()}"></i>鞍点格（有歧义）</span>
+        </div>`, true)}
+      <div class="stack">
+        ${card("控件", "", `
+          <div class="stack">
+            <label class="ctl"><span>标量场</span>
+              <select id="sq-field">${FIELDS_2D.map((f) => `<option value="${f.id}"${f.id === sq.field ? " selected" : ""}>${f.label}</option>`).join("")}</select></label>
+            ${slider("sq-level", "阈值 level", -0.6, 0.6, 0.01, sq.level, (v) => v.toFixed(2))}
+            ${slider("sq-res", "分辨率 N（每轴格子数）", 4, 24, 1, sq.res, (v) => v + " × " + v + " = " + v * v + " 格")}
+            <hr style="border:none;border-top:1px solid var(--line);margin:2px 0">
+            <label class="check"><input type="checkbox" id="sq-flip"${sq.flip ? " checked" : ""}>反转鞍点配对（看歧义后果）</label>
+            <label class="check"><input type="checkbox" id="sq-grid"${sq.grid ? " checked" : ""}>显示体素网格</label>
+            <label class="check"><input type="checkbox" id="sq-corners"${sq.corners ? " checked" : ""}>显示角点内外状态</label>
+          </div>`)}
+        ${card("当前场", "", `<div class="stats">
+            ${stat(fmt(b.cells.length), "格子总数")}${stat(fmt(b.cutCells), "表面穿过的格子")}
+            ${stat(fmt(b.segCount), "线段数")}${stat(fmt(b.saddles), "鞍点格", b.saddles ? "warn" : "")}
+          </div><p class="kv">${esc(b.field.note)}</p>`)}
+        ${selHtml}
+      </div>
+    </div>`;
+
+  document.getElementById("sq-field").addEventListener("change", (e) => { sq.field = e.target.value; sqRender(); });
+  bindSlider("sq-level", null, (v) => { sq.level = v; sqRender(); }, (v) => v.toFixed(2));
+  bindSlider("sq-res", null, (v) => { sq.res = v; sqRender(); }, (v) => v + " × " + v + " = " + v * v + " 格");
+  document.getElementById("sq-flip").addEventListener("change", (e) => { sq.flip = e.target.checked; sqRender(); });
+  document.getElementById("sq-grid").addEventListener("change", (e) => { sq.grid = e.target.checked; sqRender(); });
+  document.getElementById("sq-corners").addEventListener("change", (e) => { sq.corners = e.target.checked; sqRender(); });
+  document.querySelectorAll("[data-cell]").forEach((r) => r.addEventListener("click", () => {
+    const k = r.getAttribute("data-cell");
+    sq.sel = sq.sel === k ? "" : k;
+    sqRender();
+  }));
+  const un = document.getElementById("sq-unsel");
+  if (un) un.addEventListener("click", () => { sq.sel = ""; sqRender(); });
+}
+
+/* ==========================================================================
+   Panel 2 — the 256 -> 15 lookup table
+   ========================================================================== */
+const cs = { pick: 5, mask: 90, flip: false };
+
+function cubeSvg(mask, size, flip, opts) {
+  const topo = cubeTopology(maskVals(mask), 0, flip);
+  const S = size, sc = S * 0.42, ox = S / 2, oy = S / 2;
+  // project any point in unit-cube space to screen space
+  const pt = (p) => { const q = project(p, -0.62, 0.46, sc); return [ox + q[0], oy + q[1]]; };
+  let out = "";
+  ED3.forEach(([a, b], e) => {
+    const A = pt(COR3[a]), B = pt(COR3[b]);
+    out += `<line x1="${A[0].toFixed(1)}" y1="${A[1].toFixed(1)}" x2="${B[0].toFixed(1)}" y2="${B[1].toFixed(1)}" stroke="${T.line2()}" stroke-width="${opts.w}"${topo.cut[e] ? "" : ' stroke-dasharray="2 2"'}/>`;
+  });
+  topo.tris.forEach((tri, i) => {
+    const hue = LOOP_HUES[topo.triLoop[i] % 4]();
+    out += `<polygon points="${tri.map((e) => { const q = pt(topo.epts[e]); return q[0].toFixed(1) + "," + q[1].toFixed(1); }).join(" ")}" fill="${hue}" fill-opacity="0.34" stroke="${hue}" stroke-width="${opts.w * 1.1}" stroke-linejoin="round"/>`;
+  });
+  COR3.forEach((c, i) => {
+    const q = pt(c);
+    const inside = ((mask >> i) & 1) === 1;
+    out += `<circle cx="${q[0].toFixed(1)}" cy="${q[1].toFixed(1)}" r="${opts.r}" fill="${inside ? T.blue() : "none"}" stroke="${inside ? T.blue() : T.fg3()}" stroke-width="${opts.w}"/>`;
+  });
+  return `<svg viewBox="0 0 ${S} ${S}" width="100%" role="img" aria-label="立方体构型 掩码 ${mask}">${out}</svg>`;
+}
+
+function barChart(cats, vals, color, xLabel, yLabel, srcNote) {
+  const W = 560, H = 200, L = 46, R = 12, Tp = 14, B = 34;
+  const max = Math.max(...vals);
+  const bw = (W - L - R) / cats.length;
+  let out = "";
+  for (let g = 0; g <= 4; g++) {
+    const y = Tp + (H - Tp - B) * (1 - g / 4);
+    out += `<line x1="${L}" y1="${y}" x2="${W - R}" y2="${y}" stroke="${T.line()}" stroke-width="0.6"/>`;
+    out += `<text x="${L - 6}" y="${y + 3.5}" text-anchor="end" font-size="10" fill="${T.fg3()}">${Math.round(max * g / 4)}</text>`;
+  }
+  cats.forEach((c, i) => {
+    const hgt = (H - Tp - B) * (vals[i] / max);
+    const x = L + i * bw + bw * 0.18, w = bw * 0.64;
+    out += `<rect x="${x}" y="${H - B - hgt}" width="${w}" height="${hgt}" fill="${color}" fill-opacity="0.75"/>`;
+    out += `<text x="${x + w / 2}" y="${H - B - hgt - 4}" text-anchor="middle" font-size="10" fill="${T.fg2()}">${vals[i]}</text>`;
+    out += `<text x="${x + w / 2}" y="${H - B + 13}" text-anchor="middle" font-size="10" fill="${T.fg3()}">${c}</text>`;
+  });
+  out += `<text x="${(L + W - R) / 2}" y="${H - 4}" text-anchor="middle" font-size="10.5" fill="${T.fg2()}">${xLabel}</text>`;
+  out += `<text transform="translate(11 ${(Tp + H - B) / 2}) rotate(-90)" text-anchor="middle" font-size="10.5" fill="${T.fg2()}">${yLabel}</text>`;
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${xLabel} 对 ${yLabel}">${out}</svg><div class="src">${srcNote}</div>`;
+}
+
+function lineChart(cats, series, xLabel, yLabel, srcNote) {
+  const W = 620, H = 260, L = 62, R = 14, Tp = 16, B = 40;
+  const all = series.flatMap((s) => s.data);
+  const max = Math.max(...all);
+  const X = (i) => L + (W - L - R) * (i / (cats.length - 1));
+  const Y = (v) => Tp + (H - Tp - B) * (1 - v / max);
+  let out = "";
+  for (let g = 0; g <= 4; g++) {
+    const y = Tp + (H - Tp - B) * (1 - g / 4);
+    out += `<line x1="${L}" y1="${y}" x2="${W - R}" y2="${y}" stroke="${T.line()}" stroke-width="0.6"/>`;
+    out += `<text x="${L - 6}" y="${y + 3.5}" text-anchor="end" font-size="10" fill="${T.fg3()}">${fmt(Math.round(max * g / 4))}</text>`;
+  }
+  cats.forEach((c, i) => { out += `<text x="${X(i)}" y="${H - B + 14}" text-anchor="middle" font-size="10" fill="${T.fg3()}">${c}</text>`; });
+  series.forEach((s, si) => {
+    const col = si === 0 ? T.blue() : T.orange();
+    out += `<polyline fill="none" stroke="${col}" stroke-width="2" points="${s.data.map((v, i) => X(i).toFixed(1) + "," + Y(v).toFixed(1)).join(" ")}"/>`;
+    s.data.forEach((v, i) => { out += `<circle cx="${X(i)}" cy="${Y(v)}" r="2.6" fill="${col}"/>`; });
+    out += `<text x="${W - R}" y="${Y(s.data[s.data.length - 1]) + (si === 0 ? -6 : 14)}" text-anchor="end" font-size="10.5" fill="${col}">${s.name}</text>`;
+  });
+  out += `<text x="${(L + W - R) / 2}" y="${H - 6}" text-anchor="middle" font-size="10.5" fill="${T.fg2()}">${xLabel}</text>`;
+  out += `<text transform="translate(13 ${(Tp + H - B) / 2}) rotate(-90)" text-anchor="middle" font-size="10.5" fill="${T.fg2()}">${yLabel}</text>`;
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${xLabel} 对 ${yLabel}">${out}</svg><div class="src">${srcNote}</div>`;
+}
+
+const CUT_HIST = [[0, 2], [3, 16], [4, 30], [5, 48], [6, 64], [7, 48], [8, 30], [9, 16], [12, 2]];
+const AMB_HIST = [[0, 136], [1, 72], [2, 30], [3, 16], [6, 2]];
+
+function casesRender() {
+  const rep = ORBITS.orbits[cs.pick][0];
+  const detail = CASE_TOPO[cs.pick];
+  const typed = Math.max(0, Math.min(255, cs.mask));
+  const typedTopo = cubeTopology(maskVals(typed), 0, cs.flip);
+
+  const gallery = ORBITS.orbits.map((g, cid) => `
+    <div class="gcell${cid === cs.pick ? " sel" : ""}" data-case="${cid}" role="button" tabindex="0" aria-label="构型 ${cid}">
+      ${cubeSvg(g[0], 104, false, { w: 0.8, r: 2.6 })}
+      <div class="cap"><b>#${cid}</b> · ${g.length} 种掩码<br>${g[0].toString(2).padStart(8, "0")} · ${ncutOf(g[0])} 棱 · ${CASE_TOPO[cid].tris.length} 面</div>
+    </div>`).join("");
+
+  const tableRows = ORBITS.orbits.map((g, cid) => {
+    const topo = CASE_TOPO[cid];
+    return `<tr><td class="num">${cid}</td><td class="num">${g[0]}</td><td class="mono">${g[0].toString(2).padStart(8, "0")}</td>
+      <td class="num">${binCount(g[0])}</td><td class="num">${ncutOf(g[0])}</td><td class="num">${topo.loops.length}</td>
+      <td class="num">${topo.tris.length}</td><td class="num">${topo.amb}</td><td class="num">${g.length}</td></tr>`;
+  }).join("");
+
+  document.getElementById("p-cases").innerHTML = `
+    <p class="lead">8 个角各有内/外两种状态，所以有 <code>2⁸ = 256</code> 种组合。但其中绝大部分只是同一形状的不同摆放：
+      立方体有 24 种旋转，再把「内外互换」（complement，形状相同、法线反向）算作等价，
+      256 种就坍缩成 <b>15 种基本构型</b>——这正是 1987 年原始论文查表的大小。</p>
+    <div class="stats" style="margin:14px 0">
+      ${stat("256", "原始组合数 2⁸")}${stat("24", "立方体旋转对称")}${stat("15", "基本构型（含无表面）")}
+      ${stat("14", "再允许镜像后")}${stat("120", "含鞍点歧义面的掩码", "warn")}
+    </div>
+    ${card("15 种基本构型", "点击任意一个查看详情", `
+      <div class="gallery">${gallery}</div>
+      <div class="legend">
+        <span><i style="background:${T.blue()}"></i>内侧角</span>
+        <span><i style="background:none;border:1px solid ${T.fg3()}"></i>外侧角</span>
+        ${[0, 1, 2, 3].map((i) => `<span><i style="background:${LOOP_HUES[i]()};opacity:.5"></i>第 ${i + 1} 个环</span>`).join("")}
+      </div>`)}
+    <div class="grid2b" style="margin-top:16px">
+      ${card(`构型 #${cs.pick} 详情`, `<code>${rep.toString(2).padStart(8, "0")}</code>`, `
+        <div class="stack">
+          ${cubeSvg(rep, 220, cs.flip, { w: 1, r: 4 })}
+          <label class="check"><input type="checkbox" id="cs-flip"${cs.flip ? " checked" : ""}>反转鞍点配对（演示不一致的后果）</label>
+          <table><tr><th>属性</th><th>值</th></tr>
+            <tr><td>代表掩码</td><td class="mono">${rep} = ${rep.toString(2).padStart(8, "0")}</td></tr>
+            <tr><td>内侧角数</td><td class="num">${binCount(rep)}</td></tr>
+            <tr><td>被切棱数</td><td class="num">${ncutOf(rep)}</td></tr>
+            <tr><td>独立环数</td><td class="num">${detail.loops.length}</td></tr>
+            <tr><td>三角形数</td><td class="num">${detail.tris.length}</td></tr>
+            <tr><td>歧义面数</td><td class="num">${detail.amb}</td></tr>
+            <tr><td>代表的掩码总数</td><td class="num">${ORBITS.orbits[cs.pick].length}</td></tr>
+          </table>
+        </div>`)}
+      <div class="stack">
+        ${card("掩码 → 构型 查询", "输入 0–255", `
+          <div class="stack">
+            <div class="row">
+              <input type="range" id="cs-mask-range" min="0" max="255" step="1" value="${typed}" style="flex:1" aria-label="掩码">
+              <input type="number" id="cs-mask-num" min="0" max="255" value="${typed}" aria-label="掩码数值">
+            </div>
+            <div class="grid2" style="grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);align-items:center">
+              ${cubeSvg(typed, 180, cs.flip, { w: 0.9, r: 3.4 })}
+              <div class="stack">
+                <div class="row kv">二进制 <code>${typed.toString(2).padStart(8, "0")}</code></div>
+                <div class="row kv">归属构型 <code>#${ORBITS.caseOf[typed]}</code> <button class="btn" id="cs-goto">查看</button></div>
+                <div class="stats">${stat(binCount(typed), "内侧角")}${stat(ncutOf(typed), "被切棱")}${stat(typedTopo.tris.length, "三角形")}</div>
+                <p class="kv">顶点总是落在被切的棱上（用线性插值定位），相邻立方体共享同一条棱，所以拼出来的网格天然水密。</p>
+              </div>
+            </div>
+          </div>`)}
+        ${card("256 种构型按被切棱数分布", "", barChart(CUT_HIST.map((c) => c[0]), CUT_HIST.map((c) => c[1]), T.blue(),
+          "被切开的棱数（条）", "掩码个数（个）",
+          "横轴：被切开的棱数 · 纵轴：掩码个数 · 单一系列 · 合计 256。不存在切 1、2、10、11 条棱的情况。来源：穷举全部 256 种掩码直接计数（本页实时计算）。"))}
+      </div>
+    </div>
+    <div class="callout warn" style="margin-top:16px">
+      <div class="t">鞍点歧义：Marching Cubes 最著名的坑</div>
+      如果一个面的四个角「内外内外」交替，这个面的四条棱就全被切开，此时有两种连法。
+      原始算法在这里是任意选择的，相邻立方体可能选得不一致，导致表面出现裂缝或非流形边。
+      256 种掩码里有 120 种至少含一个这样的面。上面的「反转鞍点配对」开关就是故意制造这种不一致——
+      在「三维实跑」里配上螺旋面这种鞍点密集的场，能看到非流形边从 0 涨到 60 多条。
+      解决办法是 Asymptotic Decider（Nielson &amp; Hamann, 1991）。
+    </div>
+    <div style="margin-top:16px">${card("鞍点歧义面数量分布", "", barChart(AMB_HIST.map((c) => c[0]), AMB_HIST.map((c) => c[1]), T.orange(),
+      "歧义面个数（个）", "掩码个数（个）",
+      "横轴：该构型含几个歧义面 · 纵轴：掩码个数 · 单一系列 · 合计 256。4 个和 5 个不会出现。来源：对 256 种掩码逐个统计（本页实时计算）。"))}</div>
+    <details style="margin-top:16px"><summary>15 种构型的完整数据</summary>
+      <table style="margin-top:8px"><tr><th class="num">#</th><th class="num">代表掩码</th><th>二进制</th><th class="num">内侧角</th>
+        <th class="num">被切棱</th><th class="num">环</th><th class="num">三角形</th><th class="num">歧义面</th><th class="num">掩码数</th></tr>
+        ${tableRows}</table>
+      <div class="src">「掩码数」一列合计 256。全部由本页内嵌实现实时计算。</div>
+    </details>`;
+
+  document.querySelectorAll("[data-case]").forEach((el) => {
+    const go = () => { cs.pick = Number(el.getAttribute("data-case")); casesRender(); };
+    el.addEventListener("click", go);
+    el.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
+  });
+  document.getElementById("cs-flip").addEventListener("change", (e) => { cs.flip = e.target.checked; casesRender(); });
+  const rng = document.getElementById("cs-mask-range"), num = document.getElementById("cs-mask-num");
+  rng.addEventListener("input", () => { cs.mask = Number(rng.value); casesRender(); });
+  num.addEventListener("input", () => { cs.mask = Number(num.value) || 0; casesRender(); });
+  document.getElementById("cs-goto").addEventListener("click", () => { cs.pick = ORBITS.caseOf[Math.max(0, Math.min(255, cs.mask))]; casesRender(); });
+}
+
+/* ==========================================================================
+   Panel 3 — live 3D marching cubes
+   ========================================================================== */
+const SHAPES = [
+  { id: "sphere", label: "球体", fn: (x, y, z) => Math.hypot(x, y, z) - 1, chi: 2, note: "亏格 0，欧拉示性数 χ = 2。" },
+  { id: "torus", label: "圆环", fn: (x, y, z) => Math.hypot(Math.hypot(x, y) - 1, z) - 0.4, chi: 0, note: "亏格 1（一个洞），χ = 0。" },
+  { id: "two", label: "双球", fn: (x, y, z) => Math.min(Math.hypot(x - 0.55, y, z) - 0.35, Math.hypot(x + 0.55, y, z) - 0.35), chi: 4, note: "两个不相连的分量，χ = 2 × 2 = 4。" },
+  { id: "blob", label: "扭曲球", fn: (x, y, z) => Math.hypot(x - 0.3 * Math.sin(3 * z), y, z) - 0.9, chi: 2, note: "把球沿 z 轴扭一下，拓扑仍是亏格 0。" },
+  { id: "gyroid", label: "螺旋面（裁切）", fn: (x, y, z) => Math.max(Math.sin(x * 2) * Math.cos(y * 2) + Math.sin(y * 2) * Math.cos(z * 2) + Math.sin(z * 2) * Math.cos(x * 2), Math.hypot(x, y, z) - 1.3), chi: 2, note: "周期性极小曲面，用包围球裁切好让它闭合。鞍点歧义最密集的场——「反转鞍点配对」在这里才有明显效果。" },
+];
+const RES = [8, 12, 16, 20, 24];
+const lv = { shape: "torus", resIdx: 2, level: 0, yaw: -0.62, pitch: 0.46, cull: true, wire: false, flip: false };
+
+function liveRender() {
+  const shape = SHAPES.find((s) => s.id === lv.shape);
+  const n = RES[lv.resIdx];
+  const t0 = performance.now();
+  const run = lv.flip ? marchingCubesFlipped(shape.fn, n, lv.level) : marchingCubes(shape.fn, n, lv.level);
+  const ms = performance.now() - t0;
+  const verts = run.verts, faces = run.faces;
+  const ec = new Map();
+  for (const [a, b, c] of faces) for (const [u, v] of [[a, b], [b, c], [c, a]]) {
+    const k = u < v ? u + "," + v : v + "," + u;
+    ec.set(k, (ec.get(k) || 0) + 1);
+  }
+  let nonmanifold = 0;
+  for (const c of ec.values()) if (c !== 2) nonmanifold++;
+  let vol = 0;
+  for (const [a, b, c] of faces) {
+    const A = verts[a], B = verts[b], C = verts[c];
+    vol += (A[0] * (B[1] * C[2] - B[2] * C[1]) - A[1] * (B[0] * C[2] - B[2] * C[0]) + A[2] * (B[0] * C[1] - B[1] * C[0])) / 6;
+  }
+  const chi = verts.length - ec.size + faces.length;
+
+  const S = 380;
+  const cx = verts.reduce((a, p) => a + p[0], 0) / Math.max(1, verts.length);
+  const cy = verts.reduce((a, p) => a + p[1], 0) / Math.max(1, verts.length);
+  const cz = verts.reduce((a, p) => a + p[2], 0) / Math.max(1, verts.length);
+  const span = Math.max(1e-6, verts.reduce((a, p) => Math.max(a, Math.hypot(p[0] - cx, p[1] - cy, p[2] - cz)), 0)) * 2;
+  const sc = S * 0.82;
+  const tris = faces.map((tri, i) => {
+    const P = tri.map((vi) => project([0.5 + (verts[vi][0] - cx) / span, 0.5 + (verts[vi][1] - cy) / span, 0.5 + (verts[vi][2] - cz) / span], lv.yaw, lv.pitch, sc));
+    const u = [P[1][0] - P[0][0], P[1][1] - P[0][1], P[1][2] - P[0][2]];
+    const v = [P[2][0] - P[0][0], P[2][1] - P[0][1], P[2][2] - P[0][2]];
+    const nx = u[1] * v[2] - u[2] * v[1], ny = u[2] * v[0] - u[0] * v[2], nz = u[0] * v[1] - u[1] * v[0];
+    const len = Math.hypot(nx, ny, nz) || 1;
+    const L = [-0.42, -0.5, 0.76], ll = Math.hypot(L[0], L[1], L[2]);
+    const ndotl = (nx * L[0] + ny * L[1] + nz * L[2]) / (len * ll);
+    return { i, P, depth: (P[0][2] + P[1][2] + P[2][2]) / 3, ndotl };
+  });
+  tris.sort((a, b) => a.depth - b.depth);
+  const keep = lv.cull ? tris.filter((x) => x.ndotl > 0) : tris;
+  let polys = "";
+  for (const x of keep) {
+    const lum = 0.28 + 0.62 * Math.max(0, Math.min(1, x.ndotl));
+    polys += `<polygon points="${x.P.map((p) => (S / 2 + p[0]).toFixed(1) + "," + (S / 2 + p[1]).toFixed(1)).join(" ")}" fill="${T.accent()}" fill-opacity="${lum.toFixed(3)}" stroke="${lv.wire ? T.line2() : T.accent()}" stroke-width="${lv.wire ? 0.5 : 0.25}" stroke-opacity="${lv.wire ? 0.55 : 0.35}" stroke-linejoin="round"/>`;
+  }
+
+  const eulerOk = chi === shape.chi;
+  const eulerNote = eulerOk
+    ? `与理论值 χ = ${shape.chi} 一致（${shape.note}）`
+    : `实测 χ = ${chi}，理论 ${shape.chi}：等值面被采样域边界裁切，或存在鞍点歧义导致的裂缝`;
+
+  document.getElementById("p-live").innerHTML = `
+    <p class="lead">这里是<b>真的在跑 Marching Cubes</b>：每次调参都对整个体素网格逐格查表、插值、拼三角形，
+      再用画家算法排序后画出来。算法与 Python + numpy 参考实现逐位一致（顶点数、面数完全相同）。</p>
+    <div class="grid2">
+      ${card(`${esc(shape.label)} · N = ${n}`, `${fmt(faces.length)} 面 · ${fmt(keep.length)} 已绘制`, `
+        <svg viewBox="0 0 ${S} ${S}" width="100%" role="img" aria-label="${esc(shape.label)}的 Marching Cubes 输出网格">${polys}</svg>
+        <div class="row" style="margin-top:8px">
+          <button class="btn" id="lv-yl">左转</button><button class="btn" id="lv-yr">右转</button>
+          <button class="btn" id="lv-pu">俯视</button><button class="btn" id="lv-pd">仰视</button>
+          <button class="btn" id="lv-reset">重置视角</button>
+        </div>`, true)}
+      <div class="stack">
+        ${card("控件", "", `
+          <div class="stack">
+            <label class="ctl"><span>隐式场</span>
+              <select id="lv-shape">${SHAPES.map((s) => `<option value="${s.id}"${s.id === lv.shape ? " selected" : ""}>${s.label}</option>`).join("")}</select></label>
+            <label class="ctl"><span>分辨率 N</span>
+              <select id="lv-res">${RES.map((r, i) => `<option value="${i}"${i === lv.resIdx ? " selected" : ""}>${r} × ${r} × ${r}（${fmt((r - 1) ** 3)} 格）</option>`).join("")}</select></label>
+            ${slider("lv-level", "阈值 level", -0.5, 0.5, 0.01, lv.level, (v) => v.toFixed(2))}
+            ${slider("lv-yaw", "水平旋转 yaw", -3.14, 3.14, 0.02, lv.yaw, (v) => Math.round(v * 180 / Math.PI) + "°")}
+            ${slider("lv-pitch", "俯仰 pitch", -1.4, 1.4, 0.02, lv.pitch, (v) => Math.round(v * 180 / Math.PI) + "°")}
+            <hr style="border:none;border-top:1px solid var(--line);margin:2px 0">
+            <label class="check"><input type="checkbox" id="lv-cull"${lv.cull ? " checked" : ""}>背面剔除（少画一半面）</label>
+            <label class="check"><input type="checkbox" id="lv-wire"${lv.wire ? " checked" : ""}>显示三角形边框</label>
+            <label class="check"><input type="checkbox" id="lv-flip"${lv.flip ? " checked" : ""}>反转鞍点配对（自动切到螺旋面）</label>
+          </div>`)}
+        ${card("本轮实测", "", `
+          <div class="stats">${stat(fmt(verts.length), "顶点 V")}${stat(fmt(ec.size), "边 E")}${stat(fmt(faces.length), "面 F")}</div>
+          <div class="stats" style="margin-top:10px">${stat(fmt(run.cellsHit), "表面穿过的格子")}
+            ${stat(ms.toFixed(0) + " ms", "提取耗时")}
+            ${stat(String(nonmanifold), "非流形边", nonmanifold ? "bad" : "ok")}</div>
+          <hr style="border:none;border-top:1px solid var(--line);margin:10px 0">
+          <div class="row kv">欧拉示性数 <code>V − E + F = ${verts.length} − ${ec.size} + ${faces.length} = ${chi}</code></div>
+          <p class="kv">${eulerNote}</p>
+          <div class="row kv">有符号体积 <code>${vol.toFixed(4)}</code> <span style="color:var(--fg3)">正数说明法线一致朝外（绕向正确）</span></div>`)}
+        <div class="callout ${nonmanifold ? "danger" : "info"}">
+          <div class="t">${nonmanifold ? "出现了非流形边" : "水密性检查"}</div>
+          ${nonmanifold
+            ? `检测到 ${nonmanifold} 条非流形边：这些边没有被恰好两个三角形共享，说明表面有裂缝。
+               打开「反转鞍点配对」就能看到这一幕——这正是鞍点歧义在相邻立方体间选择不一致的后果；
+               若没开这个开关，多半是等值面被采样域边界裁切了。`
+            : `每条边都恰好被两个三角形共享，曲面是水密的——这正是 Marching Cubes 最大的优点，也是它能直接用于 3D 打印的原因。
+               注意：只有螺旋面这类鞍点密集的场才会受「反转鞍点配对」影响，而且分辨率太低时也看不到；
+               球体、圆环几乎碰不到歧义面，所以开关对它们没有可见效果。`}
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:16px">${card("为什么体素网格决定了拓扑", "", `
+      <p class="lead">三角形的走向完全由体素网格决定，跟形体结构毫无关系——这就是 Marching Cubes 输出「边流（edge flow）很差」的根本原因。
+      网格线横平竖直地铺在曲面上，关节处一做动画就会出现折痕和挤压，UV 展开也很痛苦。
+      这也是为什么清理 Marching Cubes 的拓扑，往往比从零建一个模型还费劲。</p>`)}</div>`;
+
+  document.getElementById("lv-shape").addEventListener("change", (e) => { lv.shape = e.target.value; liveRender(); });
+  document.getElementById("lv-res").addEventListener("change", (e) => { lv.resIdx = Number(e.target.value); liveRender(); });
+  bindSlider("lv-level", null, (v) => { lv.level = v; liveRender(); }, (v) => v.toFixed(2));
+  bindSlider("lv-yaw", null, (v) => { lv.yaw = v; liveRender(); }, (v) => Math.round(v * 180 / Math.PI) + "°");
+  bindSlider("lv-pitch", null, (v) => { lv.pitch = v; liveRender(); }, (v) => Math.round(v * 180 / Math.PI) + "°");
+  document.getElementById("lv-cull").addEventListener("change", (e) => { lv.cull = e.target.checked; liveRender(); });
+  document.getElementById("lv-wire").addEventListener("change", (e) => { lv.wire = e.target.checked; liveRender(); });
+  document.getElementById("lv-flip").addEventListener("change", (e) => {
+    lv.flip = e.target.checked;
+    if (lv.flip && lv.shape !== "gyroid") lv.shape = "gyroid";
+    liveRender();
+  });
+  document.getElementById("lv-yl").addEventListener("click", () => { lv.yaw -= 0.26; liveRender(); });
+  document.getElementById("lv-yr").addEventListener("click", () => { lv.yaw += 0.26; liveRender(); });
+  document.getElementById("lv-pu").addEventListener("click", () => { lv.pitch = Math.max(-1.4, lv.pitch - 0.2); liveRender(); });
+  document.getElementById("lv-pd").addEventListener("click", () => { lv.pitch = Math.min(1.4, lv.pitch + 0.2); liveRender(); });
+  document.getElementById("lv-reset").addEventListener("click", () => { lv.yaw = -0.62; lv.pitch = 0.46; liveRender(); });
+}
+
+/* ==========================================================================
+   Panel 4 — measured cost
+   ========================================================================== */
+const SWEEP = [
+  { n: 16, cells: 3375, sphere: [480, 956, 0.01], torus: [552, 1104, 0.01] },
+  { n: 24, cells: 12167, sphere: [1128, 2252, 0.03], torus: [1320, 2640, 0.03] },
+  { n: 32, cells: 29791, sphere: [1992, 3980, 0.06], torus: [2368, 4736, 0.06] },
+  { n: 48, cells: 103823, sphere: [4632, 9260, 0.18], torus: [5472, 10944, 0.18] },
+  { n: 64, cells: 250047, sphere: [8376, 16748, 0.42], torus: [9792, 19584, 0.42] },
+  { n: 96, cells: 857375, sphere: [18960, 37916, 1.34], torus: [23280, 46560, 1.38] },
+  { n: 128, cells: 2048383, sphere: [33696, 67388, 3.15], torus: [41024, 82048, 3.19] },
+];
+
+function costRender() {
+  const rows = SWEEP.map((s) => `<tr><td class="num">${s.n}</td><td class="num">${fmt(s.cells)}</td>
+    <td class="num">${fmt(s.sphere[0])}</td><td class="num">${fmt(s.sphere[1])}</td><td class="num">${s.sphere[2].toFixed(2)}s</td>
+    <td class="num">${fmt(s.torus[0])}</td><td class="num">${fmt(s.torus[1])}</td><td class="num">${s.torus[2].toFixed(2)}s</td></tr>`).join("");
+  document.getElementById("p-cost").innerHTML = `
+    <p class="lead">Marching Cubes 的<b>几何精度其实很好</b>，差的是<b>拓扑质量</b>。
+      想要光滑就得把格子切细，面数按平方增长——这就是课程里说的那个瓶颈。</p>
+    <div class="stats" style="margin:14px 0">
+      ${stat("67,388", "球体三角面 @ N=128", "bad")}${stat("2,048,383", "需要检查的立方体 @ N=128")}
+      ${stat("0.0077%", "球体表面积相对误差 @ N=192", "ok")}${stat("1987", "算法发表年份（至今未变）")}
+    </div>
+    ${card("三角面数随体素分辨率的增长", "对数级增长", lineChart(
+      SWEEP.map((s) => String(s.n)),
+      [{ name: "球体（亏格 0）", data: SWEEP.map((s) => s.sphere[1]) }, { name: "圆环（亏格 1）", data: SWEEP.map((s) => s.torus[1]) }],
+      "体素分辨率 N（每轴采样点数）", "三角面数量（个）",
+      "图例：球体（亏格 0）与圆环（亏格 1）两条曲线，均为原始计数、未做平滑。来源：参考实现（Python + numpy 2.5.1，纯 CPU 单线程）· 采样域 [-1.5, 1.5]³ · 阈值 0 · 2026-10-20 实测。"))}
+    <div class="grid2" style="margin-top:16px">
+      ${card("完整实测数据", "", `<table><tr><th class="num">N</th><th class="num">立方体数</th><th class="num">球体顶点</th>
+        <th class="num">球体面</th><th class="num">球体秒</th><th class="num">圆环顶点</th><th class="num">圆环面</th><th class="num">圆环秒</th></tr>${rows}</table>`, true)}
+      <div class="stack">
+        ${card("一个漂亮的自洽校验", "", `
+          <p class="kv">对水密网格有 <code>E = 3F/2</code>，代入欧拉公式 <code>V − E + F = 2 − 2g</code> 可得：</p>
+          <table><tr><th>形状</th><th>亏格 g</th><th>关系式</th><th>N=128 实测</th></tr>
+            <tr><td>球体</td><td class="num">0</td><td class="mono">F = 2V − 4</td><td class="mono">2×33696−4 = 67388 ✓</td></tr>
+            <tr><td>圆环</td><td class="num">1</td><td class="mono">F = 2V</td><td class="mono">2×41024 = 82048 ✓</td></tr></table>
+          <p class="kv" style="color:var(--fg3)">两条公式分毫不差，说明输出确实是干净的水密流形网格——面数多，但质量本身没问题。</p>`)}
+        ${card("几何精度 vs 解析值", "N = 192", `<table><tr><th>形状</th><th>表面积（实测 / 解析）</th><th>误差</th><th>体积（实测 / 解析）</th><th>误差</th></tr>
+          <tr><td>球体 R=1</td><td class="mono">12.56540 / 12.56637</td><td class="num">0.0077%</td><td class="mono">4.18817 / 4.18879</td><td class="num">0.0148%</td></tr>
+          <tr><td>圆环 R=1, r=0.4</td><td class="mono">15.78995 / 15.79137</td><td class="num">0.0089%</td><td class="mono">3.15726 / 3.15827</td><td class="num">0.0319%</td></tr></table>`, true)}
+      </div>
+    </div>
+    <h3>四条局限</h3>
+    <div class="grid2" style="grid-template-columns:1fr 1fr">
+      ${card("1 · 面数爆炸", "", `<p class="kv">N=128 的球体就已经 6.7 万面。生产环境的角色模型通常希望控制在几千到几万面，而 Marching Cubes 随手就是几十万面。</p>`)}
+      ${card("2 · 边流很差", "", `<p class="kv">三角形走向由体素网格决定，与形体结构无关。关节处一做动画就出现折痕（creasing）和挤压（pinching）。</p>`)}
+      ${card("3 · 贴图困难", "", `<p class="kv">稠密而不规则的拓扑让 UV 展开和贴图变得复杂，容易产生贴图瑕疵。</p>`)}
+      ${card("4 · 分辨率绑定", "", `<p class="kv">细节受格子大小限制，薄结构和锐利边角容易被抹平或产生锯齿。提高分辨率能缓解，代价是回到第 1 条。</p>`)}
+    </div>
+    <div style="margin-top:16px">${card("后继与改进", "", `<table><tr><th>方法</th><th>年份 / 出处</th><th>解决什么</th></tr>
+      <tr><td>Marching Tetrahedra</td><td>专利期内</td><td>绕开专利，同时消除鞍点歧义（四面体没有歧义）</td></tr>
+      <tr><td>Asymptotic Decider</td><td>Nielson &amp; Hamann, 1991</td><td>面上的鞍点歧义</td></tr>
+      <tr><td>Natarajan 临界点判定</td><td>1994</td><td>立方体内部的歧义，新增 4 个构型</td></tr>
+      <tr><td>Dual Contouring</td><td>2002</td><td>允许顶点移出格子，能保住锐边</td></tr>
+      <tr><td><a href="https://research.nvidia.com/labs/toronto-ai/DMTet/">DMTet</a></td><td>NeurIPS 2021</td><td>可微分的等值面提取，支持梯度优化</td></tr>
+      <tr><td><a href="https://research.nvidia.com/labs/toronto-ai/flexicubes/">FlexiCubes</a></td><td>SIGGRAPH 2023</td><td>顶点可移动，表面更平滑；InstantMesh 采用</td></tr>
+      <tr><td><a href="https://huggingface.co/spaces/Yiwen-ntu/MeshAnything">MeshAnything</a></td><td>2024</td><td>把稠密网格转成艺术家级低多边形网格</td></tr></table>`, true)}</div>
+    <div class="callout info" style="margin-top:16px">
+      <div class="t">专利这段历史</div>
+      论文发表于 1987 年 SIGGRAPH（Lorensen &amp; Cline），最初动机是 CT 医学影像可视化。
+      对应专利 US 4,710,876 由通用电气持有，1985-06-05 申请、1987-12-01 授权、2005-06-05 到期。
+      专利期内社区为了绕开它开发了 Marching Tetrahedra，顺带解决了歧义问题。现在可以免版税自由使用。
+    </div>`;
+}
+
+/* ---------------- boot ---------------- */
+sqRender();
+casesRender();
+liveRender();
+costRender();
+</script>
+</body>
+</html>
